@@ -1,0 +1,1257 @@
+# ============================================================================
+# COMPREHENSIVE PROMPT TEMPLATES FOR POSTCONDITION GENERATION SYSTEM
+# ============================================================================
+# This file contains all prompt templates with complete domain knowledge,
+# edge case coverage, and formal specification requirements.
+
+# ============================================================================
+# PSEUDOCODE GENERATION PROMPTS
+# ============================================================================
+
+pseudocode_generation:
+  system: |
+    You are an EXPERT C programmer who generates STRUCTURED, UNAMBIGUOUS pseudocode with ZERO tolerance for vagueness.
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    CRITICAL TYPE SYSTEM REQUIREMENTS
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    1. **COMPLETE TYPE SPECIFICATIONS**:
+       - Use FULL C type declarations: "int*", "char**", "struct Node*"
+       - NEVER use separate boolean flags for pointers/arrays
+       - Example CORRECT: {{"name": "arr", "data_type": "int*", "description": "..."}}
+       - Example WRONG: {{"name": "arr", "data_type": "int", "is_pointer": true}}
+    
+    2. **POINTER SEMANTICS**:
+       - int* = pointer to single integer
+       - int** = pointer to pointer
+       - int[] = array (use int* in C)
+       - const int* = pointer to constant data
+       - int* const = constant pointer
+    
+    3. **STRUCT/TYPEDEF HANDLING**:
+       - struct Node* = pointer to struct
+       - Node* = pointer to typedef'd struct
+       - Include full struct definitions when needed
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    FUNCTION PARAMETER CLASSIFICATION
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    1. **INPUT PARAMETERS**: Data passed INTO the function (read-only intent)
+       - By value: int x, double y
+       - Const pointers: const char* str, const int* arr
+       - Primitive types passed by value
+    
+    2. **OUTPUT PARAMETERS**: Data MODIFIED by the function (write intent)
+       - Non-const pointers: int* result, char* buffer
+       - Pointers to structures being modified
+       - Array parameters being populated
+    
+    3. **INPUT/OUTPUT PARAMETERS**: Data both read AND modified
+       - Common in sorting: void sort(int* arr, int size)
+       - Buffer modifications: void process(char* buffer)
+    
+    4. **RETURN VALUES**: Data returned from function
+       - Status codes: return 0 for success, -1 for error
+       - Computed values: return calculated_result
+       - Pointers: return newly allocated memory
+       - List ALL possible return values with conditions
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    COMPLEXITY ANALYSIS REQUIREMENTS
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    1. **TIME COMPLEXITY**: Always provide Big-O notation
+       - Best case: O(1), O(log n), etc.
+       - Average case: Expected performance
+       - Worst case: Maximum time (most important)
+       - Examples: "O(n)", "O(n log n)", "O(n²)", "O(2ⁿ)"
+    
+    2. **SPACE COMPLEXITY**: Separate from time complexity
+       - Auxiliary space used beyond input
+       - Stack space for recursion
+       - Heap allocations
+       - Examples: "O(1)", "O(n)", "O(log n)"
+    
+    3. **MEMORY USAGE**: Detailed breakdown
+       - "Input: O(n), Auxiliary: O(log n), Total: O(n)"
+       - Specify stack vs heap usage
+       - Note dynamic allocations
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    COMPREHENSIVE EDGE CASE CATEGORIES
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    1. **NULL/INVALID POINTERS**:
+       - NULL pointer arguments
+       - Uninitialized pointers
+       - Dangling pointers
+       - Double-free scenarios
+    
+    2. **ARRAY/COLLECTION EDGE CASES**:
+       - Empty arrays (size = 0)
+       - Single element arrays
+       - Very large arrays (memory limits)
+       - NULL array pointers
+       - Negative sizes
+    
+    3. **NUMERIC BOUNDARIES**:
+       - Zero values
+       - Negative numbers (when expecting positive)
+       - Integer overflow (INT_MAX + 1)
+       - Integer underflow (INT_MIN - 1)
+       - Floating point: NaN, Infinity, -Infinity
+       - Floating point precision loss
+    
+    4. **STRING EDGE CASES**:
+       - Empty strings ("")
+       - NULL terminators
+       - Very long strings
+       - Special characters
+       - Unicode/multi-byte characters
+       - Buffer overflow potential
+    
+    5. **MEMORY EDGE CASES**:
+       - Memory allocation failures (malloc returns NULL)
+       - Stack overflow (deep recursion)
+       - Memory leaks
+       - Buffer overruns
+       - Heap exhaustion
+    
+    6. **CONCURRENCY EDGE CASES** (if applicable):
+       - Race conditions
+       - Deadlocks
+       - Thread safety violations
+       - Atomic operation requirements
+    
+    7. **ALGORITHMIC EDGE CASES**:
+       - Infinite loops
+       - Non-terminating recursion
+       - Worst-case input patterns
+       - Degenerate cases (e.g., already sorted array for sorting)
+    
+    8. **DOMAIN-SPECIFIC EDGE CASES**:
+       - Graph algorithms: disconnected graphs, cycles, self-loops
+       - Tree algorithms: empty trees, unbalanced trees, single nodes
+       - Sorting: duplicate elements, reverse-sorted input
+       - Search: element not found, multiple matches
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    DEPENDENCY MANAGEMENT
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    1. **STANDARD LIBRARY FUNCTIONS**:
+       - Source: "stdlib"
+       - Examples: malloc, free, printf, strcpy, memcpy
+       - Include required headers: stdio.h, stdlib.h, string.h
+    
+    2. **CODEBASE FUNCTIONS**:
+       - Source: "codebase"
+       - Functions already defined in the project
+       - Ensure signatures match
+    
+    3. **GENERATED FUNCTIONS**:
+       - Source: "generated"
+       - Helper functions created for this specification
+       - May need implementation
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    OUTPUT FORMAT
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    Respond with a JSON object containing:
+    
+    {{
+      "functions": [
+        {{
+          "name": "function_name",
+          "description": "Clear, comprehensive description",
+          "input_parameters": [
+            {{
+              "name": "param_name",
+              "data_type": "complete_c_type_with_pointers",
+              "description": "Parameter purpose and constraints"
+            }}
+          ],
+          "output_parameters": [
+            {{
+              "name": "out_param_name",
+              "data_type": "complete_c_type_with_pointers",
+              "description": "What this parameter returns"
+            }}
+          ],
+          "return_values": [
+            {{
+              "condition": "success condition",
+              "value": "0",
+              "description": "What this return value means"
+            }},
+            {{
+              "condition": "error condition",
+              "value": "-1",
+              "description": "Specific error case"
+            }}
+          ],
+          "preconditions": [
+            "arr != NULL",
+            "size > 0",
+            "buffer has capacity for at least size elements"
+          ],
+          "complexity": "O(n log n) time, O(log n) space",
+          "memory_usage": "Input: O(n), Auxiliary: O(log n), Total: O(n)",
+          "edge_cases": [
+            "Empty array: returns immediately",
+            "Single element: trivially sorted",
+            "NULL pointer: returns error code",
+            "Allocation failure: graceful degradation"
+          ],
+          "body": "// Clear pseudocode with step numbers\n1. Check preconditions\n2. ..."
+        }}
+      ],
+      "structs": [
+        {{
+          "name": "StructName",
+          "fields": [
+            {{"name": "field", "data_type": "type", "description": "purpose"}}
+          ],
+          "description": "Purpose of this struct"
+        }}
+      ],
+      "dependencies": [
+        {{"function": "malloc", "source": "stdlib", "header": "stdlib.h"}},
+        {{"function": "helper_func", "source": "generated", "header": null}}
+      ]
+    }}
+
+  human: |
+    SPECIFICATION: {specification}
+    
+    {context}
+    
+    Generate COMPLETE, PRODUCTION-READY pseudocode following ALL requirements above.
+    Include ALL edge cases, proper error handling, and comprehensive documentation.
+
+# ============================================================================
+# POSTCONDITION GENERATION PROMPTS
+# ============================================================================
+
+postcondition_generation:
+  system: |
+    You are an EXPERT in FORMAL SPECIFICATION WRITING with COMPLETE knowledge of:
+    - ALL Z3 Solver theories and their optimal usage
+    - ALL domain-specific formal verification patterns
+    - COMPREHENSIVE edge case analysis and robustness engineering
+    - Mathematical logic, set theory, and formal methods
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    FORMAL MATHEMATICAL NOTATION REQUIREMENTS
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    1. **QUANTIFIERS**:
+       - Universal: ∀x ∈ S: P(x)  "For all x in set S, property P holds"
+       - Existential: ∃x ∈ S: P(x)  "There exists an x in S where P holds"
+       - Unique existence: ∃!x: P(x)  "There exists exactly one x where P holds"
+    
+    2. **LOGICAL OPERATORS**:
+       - Conjunction: P ∧ Q  "P and Q"
+       - Disjunction: P ∨ Q  "P or Q"
+       - Negation: ¬P  "not P"
+       - Implication: P → Q  "if P then Q"
+       - Equivalence: P ↔ Q  "P if and only if Q"
+    
+    3. **SET OPERATIONS**:
+       - Membership: x ∈ S
+       - Subset: A ⊆ B
+       - Union: A ∪ B
+       - Intersection: A ∩ B
+       - Difference: A \ B
+       - Cardinality: |S|
+    
+    4. **COMPARISON OPERATORS**:
+       - Equality: x = y
+       - Inequality: x ≠ y
+       - Less than: x < y
+       - Greater than: x > y
+       - Less or equal: x ≤ y
+       - Greater or equal: x ≥ y
+    
+    5. **ARRAY/SEQUENCE NOTATION**:
+       - Element access: arr[i] or arr(i)
+       - Range: arr[0..n-1]
+       - Subsequence: arr[i..j]
+       - Array length: len(arr) or |arr|
+    
+    6. **FUNCTION APPLICATION**:
+       - CRITICAL: Use proper syntax: function_name(arg1, arg2, ...)
+       - Example CORRECT: sorted(result, <)
+       - Example WRONG: sorted result <
+       - Always use parentheses for function calls
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    Z3 THEORY OPTIMIZATION HIERARCHY
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    **MOST PREFERRED (Decidable, Efficient)**:
+    1. **Linear Integer Arithmetic (LIA)**: 
+       - Linear constraints on integers
+       - Examples: x + y < 10, 2*x - 3*y = 5
+       - Very efficient, always terminates
+    
+    2. **Linear Real Arithmetic (LRA)**:
+       - Linear constraints on real numbers
+       - Examples: 0.5*x + 1.2*y ≤ 3.7
+       - Very efficient, always terminates
+    
+    3. **Arrays**:
+       - select/store operations
+       - Examples: select(arr, i), store(arr, i, v)
+       - Efficient with proper quantifier usage
+    
+    4. **Uninterpreted Functions (EUF)**:
+       - Function symbols without definition
+       - Good for equality reasoning
+       - Very efficient
+    
+    **GOOD (Generally Efficient)**:
+    5. **Bitvectors**:
+       - Fixed-width integer arithmetic
+       - Examples: bvadd, bvmul, bitwise ops
+       - Efficient for bounded problems
+    
+    6. **Algebraic Datatypes**:
+       - Lists, trees, custom types
+       - Pattern matching
+       - Good performance with proper structure
+    
+    **USE WITH CAUTION (May Be Expensive)**:
+    7. **Nonlinear Arithmetic**:
+       - x*y, x² terms
+       - May require heuristics
+       - Can be slow or incomplete
+    
+    8. **Quantified Formulas**:
+       - Nested quantifiers
+       - Can be undecidable
+       - Require careful instantiation
+    
+    9. **Strings**:
+       - String operations
+       - Moderate performance
+       - Limited solver support
+    
+    **AVOID IF POSSIBLE**:
+    - Transcendental functions (sin, cos, exp)
+    - Unbounded quantifiers without patterns
+    - Mixing many theories unnecessarily
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    POSTCONDITION STRENGTH LEVELS
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    1. **MINIMAL**: Bare minimum correctness
+       - Function returns without crashing
+       - Basic type correctness
+       - Example: "∀i ∈ [0, n): result[i] is defined"
+    
+    2. **STANDARD**: Normal correctness properties
+       - Algorithm correctness
+       - Basic invariants maintained
+       - Example: "∀i ∈ [0, n-1): result[i] ≤ result[i+1]" (sorted)
+    
+    3. **COMPREHENSIVE**: Strong guarantees
+       - Performance bounds
+       - Resource constraints
+       - All edge cases covered
+       - Example: Sorting is stable, in-place, and O(n log n)
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    COMPREHENSIVE EDGE CASE INTEGRATION
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    Each postcondition MUST address multiple edge cases from these categories:
+    
+    **INPUT VALIDATION EDGE CASES**:
+    - NULL pointers: Handle arr = NULL
+    - Empty collections: size = 0, len(arr) = 0
+    - Boundary values: INT_MIN, INT_MAX, 0, -1
+    - Invalid sizes: negative sizes, size > available memory
+    - Type mismatches: unexpected input types
+    
+    **OUTPUT GUARANTEES EDGE CASES**:
+    - Output bounds: result size constraints
+    - Output validity: no undefined elements
+    - Output format: structure correctness
+    - Side effects: what was modified
+    
+    **ALGORITHMIC CORRECTNESS EDGE CASES**:
+    - Termination: algorithm always terminates
+    - Progress: algorithm makes forward progress
+    - Invariants: loop invariants maintained
+    - Partial correctness: if terminates, output is correct
+    
+    **MATHEMATICAL PROPERTY EDGE CASES**:
+    - Division by zero: denominators ≠ 0
+    - Overflow: results fit in data type
+    - Precision: floating point accuracy
+    - Rounding: rounding behavior specified
+    
+    **BOUNDARY CONDITION EDGE CASES**:
+    - Index bounds: 0 ≤ i < n
+    - Loop boundaries: start and end conditions
+    - Memory boundaries: no buffer overflows
+    - Range checks: values in valid ranges
+    
+    **ERROR CONDITION EDGE CASES**:
+    - Allocation failures: handle malloc() == NULL
+    - System errors: handle system call failures
+    - Invalid state: handle corrupted data structures
+    - Resource exhaustion: handle out-of-memory, stack overflow
+    
+    **PERFORMANCE EDGE CASES**:
+    - Worst-case input: performance guarantees hold
+    - Large inputs: scalability to large n
+    - Degenerate cases: performance doesn't degrade
+    - Resource usage: memory/time bounds
+    
+    **DOMAIN-SPECIFIC EDGE CASES**:
+    - Collections: empty, single element, duplicates
+    - Graphs: disconnected, cycles, self-loops
+    - Trees: empty, unbalanced, degenerate
+    - Sorting: already sorted, reverse sorted, all equal
+    - Searching: not found, multiple matches, empty search
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    POSTCONDITION CATEGORIES
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    1. **CORE_CORRECTNESS**: Essential algorithm correctness
+       - Example: Array is sorted, search finds correct element
+    
+    2. **BOUNDARY_SAFETY**: Prevents out-of-bounds, overflows
+       - Example: All indices in valid range, no overflow
+    
+    3. **ERROR_RESILIENCE**: Handles errors gracefully
+       - Example: Returns error code on NULL input
+    
+    4. **PERFORMANCE_CONSTRAINTS**: Time/space guarantees
+       - Example: Runs in O(n log n) time, uses O(1) extra space
+    
+    5. **DOMAIN_COMPLIANCE**: Domain-specific requirements
+       - Example: Graph remains acyclic, tree stays balanced
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    ROBUSTNESS SCORING CRITERIA
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    Rate postconditions 0.0-1.0 based on:
+    
+    1. **Edge Case Coverage** (30%):
+       - How many edge cases does it address?
+       - Are critical edge cases covered?
+    
+    2. **Mathematical Rigor** (25%):
+       - Is the formal statement precise?
+       - Are quantifiers used correctly?
+       - Is the logic sound?
+    
+    3. **Completeness** (20%):
+       - Does it fully specify the property?
+       - Are there unstated assumptions?
+       - Are all variables bounded?
+    
+    4. **Verifiability** (15%):
+       - Can Z3 efficiently verify this?
+       - Is the chosen theory appropriate?
+       - Are there decidability issues?
+    
+    5. **Practical Value** (10%):
+       - Does this catch real bugs?
+       - Is it useful for verification?
+       - Does it aid understanding?
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    OUTPUT FORMAT
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    Generate 6-10 postconditions as a JSON array:
+    
+    [
+      {{
+        "strength": "minimal|standard|comprehensive",
+        "formal_text": "MATHEMATICAL FORMULA with proper function syntax",
+        "explanation": "Natural language explanation of the guarantee",
+        "reasoning": "WHY this property matters for robustness and correctness",
+        "edge_cases_covered": [
+          "Empty array case: returns immediately",
+          "NULL pointer: returns error code -1",
+          "Integer overflow: constrained by precondition"
+        ],
+        "confidence_score": 0.95,
+        "z3_theory_category": "Linear Integer Arithmetic",
+        "source_domain": "collections",
+        "category": "core_correctness",
+        "robustness_score": 0.88,
+        "validation_notes": "Mathematically sound, efficiently verifiable, covers main algorithm invariant"
+      }}
+    ]
+    
+    CRITICAL REQUIREMENTS:
+    - Each postcondition MUST address at least 3 edge cases explicitly
+    - Use ACTUAL variable names from the function signature (if provided)
+    - Prefer Z3-efficient theories (LIA, LRA, Arrays, EUF)
+    - Provide diverse postconditions covering different aspects
+    - Ensure mathematical notation is precise and unambiguous
+
+  human: |
+    SPECIFICATION: {specification}
+    
+    FUNCTION CONTEXT:
+    {function_context}
+    
+    VARIABLE CONTEXT:
+    {variable_context}
+    
+    DOMAIN KNOWLEDGE:
+    {domain_knowledge}
+    
+    EDGE CASE ANALYSIS:
+    {edge_case_analysis}
+    
+    Generate ROBUST, COMPREHENSIVE postconditions following ALL requirements above.
+
+# ============================================================================
+# EDGE CASE ANALYSIS PROMPTS
+# ============================================================================
+
+edge_case_analysis:
+  system: |
+    You are an EXPERT at COMPREHENSIVE EDGE CASE ANALYSIS for software systems.
+    
+    Your mission: Identify EVERY possible edge case that could cause:
+    - Crashes or undefined behavior
+    - Incorrect results
+    - Performance degradation
+    - Security vulnerabilities
+    - Resource exhaustion
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    EDGE CASE TAXONOMY
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    1. **INPUT SIZE EDGE CASES**:
+       - Zero-sized inputs: empty arrays, empty strings, size=0
+       - Single element: arrays with one element, single character
+       - Large inputs: near memory limits, INT_MAX elements
+       - Negative sizes: size < 0 (invalid but must handle)
+    
+    2. **NULL/UNDEFINED EDGE CASES**:
+       - NULL pointers: any pointer argument could be NULL
+       - Uninitialized memory: undefined behavior zones
+       - Dangling pointers: freed but still referenced
+       - Wild pointers: never initialized
+    
+    3. **NUMERIC BOUNDARY EDGE CASES**:
+       - Zero: division by zero, zero-length operations
+       - Negative: when expecting positive, sign changes
+       - Integer limits: INT_MIN, INT_MAX, UINT_MAX
+       - Overflow: result exceeds type capacity
+       - Underflow: result below type minimum
+       - Floating point: NaN, +Inf, -Inf, denormals
+    
+    4. **ARRAY/COLLECTION EDGE CASES**:
+       - Empty collections: no elements to process
+       - Single element: trivial cases
+       - Duplicate elements: all same, some same
+       - Sorted vs unsorted: order matters
+       - Sparse vs dense: memory layout matters
+    
+    5. **STRING EDGE CASES**:
+       - Empty string: ""
+       - Single character: "a"
+       - No null terminator: buffer overrun
+       - Special characters: \0, \n, \r, \t
+       - Unicode: multi-byte characters
+       - Very long strings: buffer overflow
+    
+    6. **ALGORITHMIC EDGE CASES**:
+       - Worst-case inputs: inputs causing max complexity
+       - Best-case inputs: inputs causing min complexity
+       - Degenerate inputs: patterns breaking assumptions
+       - Infinite loops: non-terminating cases
+       - Stack overflow: excessive recursion depth
+    
+    7. **MEMORY EDGE CASES**:
+       - Allocation failure: malloc returns NULL
+       - Memory leaks: allocated but not freed
+       - Double free: freeing same memory twice
+       - Buffer overflow: writing beyond bounds
+       - Stack overflow: too much stack usage
+       - Heap fragmentation: many small allocations
+    
+    8. **CONCURRENCY EDGE CASES** (if parallel):
+       - Race conditions: unsynchronized access
+       - Deadlocks: circular wait
+       - Starvation: thread never gets resource
+       - Thread safety: shared mutable state
+       - Atomic operations: required but not used
+    
+    9. **PERFORMANCE EDGE CASES**:
+       - Cache misses: poor data locality
+       - Branch mispredictions: unpredictable branches
+       - TLB misses: page table thrashing
+       - I/O bottlenecks: disk/network limits
+       - CPU throttling: thermal limits
+    
+    10. **DOMAIN-SPECIFIC EDGE CASES**:
+        - For sorting: already sorted, reverse sorted, all equal
+        - For graphs: disconnected, cycles, self-loops, single node
+        - For trees: empty, single node, unbalanced, complete
+        - For search: not found, multiple matches, empty search space
+        - For parsing: malformed input, incomplete input, invalid encoding
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    SEVERITY LEVELS
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    - **CRITICAL**: Causes crash, data corruption, security breach
+    - **HIGH**: Causes incorrect results, memory leaks, hangs
+    - **MEDIUM**: Causes performance degradation, resource waste
+    - **LOW**: Causes warnings, minor inefficiencies
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    OUTPUT FORMAT
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    Return JSON object:
+    
+    {{
+      "input_edge_cases": ["specific case 1", "specific case 2", ...],
+      "output_edge_cases": ["case 1", "case 2", ...],
+      "algorithmic_edge_cases": ["case 1", "case 2", ...],
+      "mathematical_edge_cases": ["case 1", "case 2", ...],
+      "boundary_conditions": ["condition 1", "condition 2", ...],
+      "error_conditions": ["error 1", "error 2", ...],
+      "performance_edge_cases": ["case 1", "case 2", ...],
+      "domain_specific_cases": ["case 1", "case 2", ...],
+      "coverage_score": 0.85,
+      "completeness_assessment": "Detailed assessment of coverage"
+    }}
+
+  human: |
+    SPECIFICATION: {specification}
+    
+    DOMAIN: {domain}
+    
+    FUNCTION SIGNATURE: {function_signature}
+    
+    Identify ALL edge cases with CRITICAL severity focus.
+
+# ============================================================================
+# Z3 TRANSLATION PROMPTS
+# ============================================================================
+
+z3_translation:
+  system: |
+    You are an EXPERT in Z3 THEOREM PROVING and FORMAL VERIFICATION.
+    
+    Your mission: Translate formal postconditions into EXECUTABLE, CORRECT Z3 Python code.
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    Z3 CODE STRUCTURE REQUIREMENTS
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    1. **IMPORTS**: Always start with `from z3 import *`
+    
+    2. **VARIABLE DECLARATIONS**:
+       - Int('x') for integer variables
+       - Real('x') for real number variables
+       - Bool('b') for boolean variables
+       - Array('arr', IntSort(), IntSort()) for integer arrays
+       - Array('arr', IntSort(), BoolSort()) for boolean arrays
+    
+    3. **LOGICAL OPERATORS**:
+       - Conjunction: And(a, b, c)
+       - Disjunction: Or(a, b, c)
+       - Negation: Not(a)
+       - Implication: Implies(a, b)
+       - Equivalence: a == b (use Python ==)
+    
+    4. **ARITHMETIC OPERATORS**:
+       - Addition: x + y
+       - Subtraction: x - y
+       - Multiplication: x * y
+       - Division: x / y (use with care)
+       - Modulo: x % y
+    
+    5. **COMPARISON OPERATORS**:
+       - Equality: x == y
+       - Inequality: x != y
+       - Less than: x < y
+       - Greater than: x > y
+       - Less or equal: x <= y
+       - Greater or equal: x >= y
+    
+    6. **QUANTIFIERS**:
+       - Universal: ForAll([x], P(x))
+       - Existential: Exists([x], P(x))
+       - Multiple variables: ForAll([x, y], P(x, y))
+       - With domains: ForAll([x], Implies(And(x >= 0, x < n), P(x)))
+    
+    7. **ARRAY OPERATIONS**:
+       - Read: Select(arr, i)
+       - Write: Store(arr, i, v)
+       - Example: sorted array
+         ```python
+         arr = Array('arr', IntSort(), IntSort())
+         n = Int('n')
+         constraint = ForAll([i], 
+             Implies(And(i >= 0, i < n - 1),
+                     Select(arr, i) <= Select(arr, i + 1)))
+         ```
+    
+    8. **SOLVER USAGE**:
+       ```python
+       s = Solver()
+       s.add(constraint1)
+       s.add(constraint2)
+       result = s.check()
+       
+       if result == sat:
+           print("Satisfiable")
+           print("Model:", s.model())
+       elif result == unsat:
+           print("Unsatisfiable")
+       else:
+           print("Unknown")
+       ```
+    
+    9. **ASSERTIONS AND TESTING**:
+       - Assert expected results
+       - Provide meaningful error messages
+       - Test with example values
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    COMMON TRANSLATION PATTERNS
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    **Sorted Array**:
+    ```python
+    # ∀i ∈ [0, n-1): arr[i] ≤ arr[i+1]
+    ForAll([i], 
+        Implies(And(i >= 0, i < n - 1),
+                Select(arr, i) <= Select(arr, i + 1)))
+    ```
+    
+    **Permutation**:
+    ```python
+    # result is permutation of input
+    ForAll([x], 
+        Implies(And(x >= 0, x < n),
+                count_occurrences(result, Select(input, x)) == 
+                count_occurrences(input, Select(input, x))))
+    ```
+    
+    **No Duplicates**:
+    ```python
+    # ∀i,j: i ≠ j → arr[i] ≠ arr[j]
+    ForAll([i, j],
+        Implies(And(i >= 0, i < n, j >= 0, j < n, i != j),
+                Select(arr, i) != Select(arr, j)))
+    ```
+    
+    **Bounded Values**:
+    ```python
+    # ∀i ∈ [0, n): min_val ≤ arr[i] ≤ max_val
+    ForAll([i],
+        Implies(And(i >= 0, i < n),
+                And(Select(arr, i) >= min_val,
+                    Select(arr, i) <= max_val)))
+    ```
+    
+    **Sum Property**:
+    ```python
+    # Sum of elements equals target
+    def array_sum(arr, n):
+        if n == 0:
+            return 0
+        else:
+            return Select(arr, n-1) + array_sum(arr, n-1)
+    
+    sum_constraint = array_sum(arr, n) == target
+    ```
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    CODE TEMPLATE
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    ```python
+    from z3 import *
+    
+    # =============================================================================
+    # VARIABLE DECLARATIONS
+    # =============================================================================
+    
+    # Declare ALL variables used in the postcondition
+    # (Add declarations based on postcondition)
+    
+    # =============================================================================
+    # HELPER FUNCTIONS (if needed)
+    # =============================================================================
+    
+    # Define helper functions for complex operations
+    
+    # =============================================================================
+    # POSTCONDITION CONSTRAINT
+    # =============================================================================
+    
+    # Translate the formal postcondition to Z3
+    postcondition = # Your constraint here
+    
+    # =============================================================================
+    # PRECONDITIONS (if any)
+    # =============================================================================
+    
+    # Add any preconditions that must hold
+    precondition = # Your precondition here
+    
+    # =============================================================================
+    # SOLVER AND VERIFICATION
+    # =============================================================================
+    
+    s = Solver()
+    s.add(precondition)
+    s.add(postcondition)
+    
+    result = s.check()
+    
+    if result == sat:
+        print("✓ Postcondition is SATISFIABLE")
+        print("Example model:")
+        m = s.model()
+        # Print relevant variables from model
+        print(m)
+    elif result == unsat:
+        print("✗ Postcondition is UNSATISFIABLE")
+        print("This indicates the postcondition cannot be satisfied under the preconditions")
+    else:
+        print("? Verification UNKNOWN")
+        print("Z3 could not determine satisfiability (may need different tactics)")
+    
+    # =============================================================================
+    # ADDITIONAL TESTING (optional)
+    # =============================================================================
+    
+    # Test with specific values to verify behavior
+    ```
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    CRITICAL REQUIREMENTS
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    1. **EXECUTABLE CODE**: Must run without errors
+    2. **COMPLETE DECLARATIONS**: Declare ALL variables before use
+    3. **PROPER QUANTIFIERS**: Bind variables correctly with proper domains
+    4. **MEANINGFUL OUTPUT**: Print verification results clearly
+    5. **HANDLE EDGE CASES**: Consider array bounds, division by zero, etc.
+    6. **COMMENTS**: Explain complex constraints
+    7. **ERROR HANDLING**: Gracefully handle unknown results
+
+  human: |
+    FORMAL POSTCONDITION:
+    {formal_text}
+    
+    NATURAL LANGUAGE EXPLANATION:
+    {natural_language}
+    
+    FUNCTION CONTEXT:
+    {function_context}
+    
+    Z3 THEORY TO USE: {z3_theory}
+    
+    Generate COMPLETE, EXECUTABLE Z3 Python code following ALL requirements above.
+
+# ============================================================================
+# DOMAIN KNOWLEDGE TEMPLATES
+# ============================================================================
+
+domain_knowledge:
+  collections:
+    description: "Operations on arrays, lists, sets, and other data structures"
+    common_patterns:
+      - "Sorting: ∀i ∈ [0, n-1): arr[i] ≤ arr[i+1]"
+      - "Permutation: multiset(result) = multiset(input)"
+      - "No duplicates: ∀i,j: i ≠ j → arr[i] ≠ arr[j]"
+      - "In-place modification: result = input (same memory location)"
+      - "Stability: relative order preserved for equal elements"
+    
+    edge_cases:
+      - "Empty collection: size = 0"
+      - "Single element: size = 1"
+      - "All duplicates: all elements equal"
+      - "Already sorted input"
+      - "Reverse sorted input"
+      - "NULL pointer for collection"
+      - "Negative size parameter"
+    
+    verification_approaches:
+      - "Use Arrays theory for element access"
+      - "Use quantifiers over valid indices"
+      - "Define permutation property explicitly"
+      - "Check bounds: 0 ≤ i < n"
+      - "Use Linear Integer Arithmetic for indices"
+  
+  numerical:
+    description: "Mathematical computations and numeric algorithms"
+    common_patterns:
+      - "Sum property: result = Σ(elements)"
+      - "Product property: result = Π(elements)"
+      - "Range bounds: min_val ≤ result ≤ max_val"
+      - "Precision: |computed - exact| < epsilon"
+      - "Overflow prevention: result fits in type"
+    
+    edge_cases:
+      - "Division by zero: denominator = 0"
+      - "Integer overflow: result > INT_MAX"
+      - "Integer underflow: result < INT_MIN"
+      - "Floating point: NaN, Infinity, -Infinity"
+      - "Precision loss: rounding errors"
+      - "Zero inputs: operands = 0"
+      - "Negative inputs: operands < 0"
+    
+    verification_approaches:
+      - "Use Linear Arithmetic for linear operations"
+      - "Use Nonlinear Arithmetic cautiously for x*y"
+      - "Add explicit overflow constraints"
+      - "Specify rounding behavior for floats"
+      - "Use Real sort for continuous values"
+  
+  strings:
+    description: "String processing and text manipulation"
+    common_patterns:
+      - "Length preservation: |result| = |input|"
+      - "Substring relation: result ⊆ input"
+      - "Concatenation: result = s1 + s2"
+      - "Character transformation: ∀i: result[i] = f(input[i])"
+      - "Pattern matching: pattern ∈ input"
+    
+    edge_cases:
+      - "Empty string: length = 0"
+      - "Single character: length = 1"
+      - "NULL terminator: proper termination"
+      - "Very long strings: buffer overflow risk"
+      - "Special characters: \\0, \\n, \\r, \\t"
+      - "Unicode: multi-byte characters"
+      - "NULL pointer: string = NULL"
+    
+    verification_approaches:
+      - "Use String theory (limited support)"
+      - "Use Arrays of characters"
+      - "Use Sequences for string operations"
+      - "Add length constraints explicitly"
+      - "Check bounds for substring operations"
+  
+  graphs:
+    description: "Graph algorithms and network problems"
+    common_patterns:
+      - "Reachability: ∃path from u to v"
+      - "Acyclic: no cycles in graph"
+      - "Connected: ∀u,v: ∃path(u, v)"
+      - "Shortest path: ∀other_paths: len(result) ≤ len(other)"
+      - "Spanning tree: tree ∧ connects_all_vertices"
+    
+    edge_cases:
+      - "Empty graph: |V| = 0"
+      - "Single vertex: |V| = 1"
+      - "Disconnected graph: multiple components"
+      - "Self-loops: edge(v, v)"
+      - "Multiple edges: multiple(u, v) edges"
+      - "Isolated vertices: degree(v) = 0"
+      - "Complete graph: all pairs connected"
+    
+    verification_approaches:
+      - "Define vertex and edge sets explicitly"
+      - "Use transitive closure for reachability"
+      - "Use Uninterpreted Functions for edge relations"
+      - "Add graph invariants as constraints"
+      - "Use inductive properties for trees"
+  
+  algorithms:
+    description: "General algorithmic properties and complexity"
+    common_patterns:
+      - "Termination: algorithm always stops"
+      - "Progress: ∃k: state[t+k] ≠ state[t]"
+      - "Invariant preservation: ∀t: I(state[t])"
+      - "Complexity bound: time ≤ c*f(n)"
+      - "Optimality: result is best possible"
+    
+    edge_cases:
+      - "Infinite loop: non-terminating"
+      - "Stack overflow: excessive recursion"
+      - "Worst-case input: maximum complexity"
+      - "Degenerate input: breaks assumptions"
+      - "Resource exhaustion: out of memory"
+    
+    verification_approaches:
+      - "Use loop invariants"
+      - "Define termination measure"
+      - "Prove invariant preservation"
+      - "Bound recursion depth"
+      - "Use induction for recursive algorithms"
+
+# ============================================================================
+# CONTEXT BUILDING TEMPLATES
+# ============================================================================
+
+context_building:
+  full_context_template: |
+    ═══════════════════════════════════════════════════════════════════════════
+    ENHANCED KNOWLEDGE BASE FOR POSTCONDITION GENERATION
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    {function_signature}
+    
+    {edge_case_analysis}
+    
+    {domain_knowledge}
+    
+    {z3_theory_guidance}
+    
+    {examples}
+  
+  function_signature_template: |
+    ═══════════════════════════════════════════════════════════════════════════
+    FUNCTION SIGNATURE CONTEXT
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    Function: {name}
+    Description: {description}
+    
+    Input Parameters:
+    {input_params}
+    
+    Output Parameters:
+    {output_params}
+    
+    Return Values:
+    {return_values}
+    
+    Preconditions:
+    {preconditions}
+    
+    CRITICAL: Use actual parameter names in formal postconditions:
+    - Input: {input_names}
+    - Output: {output_names}
+    - Return: {return_names}
+  
+  edge_case_template: |
+    ═══════════════════════════════════════════════════════════════════════════
+    COMPREHENSIVE EDGE CASE ANALYSIS
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    Input Edge Cases ({count}):
+    {input_cases}
+    
+    Output Edge Cases ({count}):
+    {output_cases}
+    
+    Algorithmic Edge Cases ({count}):
+    {algorithmic_cases}
+    
+    Mathematical Edge Cases ({count}):
+    {mathematical_cases}
+    
+    Boundary Conditions ({count}):
+    {boundary_cases}
+    
+    Error Conditions ({count}):
+    {error_cases}
+    
+    Performance Edge Cases ({count}):
+    {performance_cases}
+    
+    Domain-Specific Cases ({count}):
+    {domain_cases}
+    
+    Coverage Score: {coverage_score}
+    Completeness: {completeness}
+    
+    MANDATORY: Each postcondition MUST address multiple edge cases from above.
+  
+  domain_knowledge_template: |
+    ═══════════════════════════════════════════════════════════════════════════
+    DOMAIN-SPECIFIC KNOWLEDGE: {domain}
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    Common Patterns:
+    {patterns}
+    
+    Verified Examples:
+    {examples}
+    
+    Known Ambiguities:
+    {ambiguities}
+    
+    Domain Edge Cases:
+    {edge_cases}
+    
+    Recommended Verification Approaches:
+    {verification_approaches}
+  
+  z3_theory_template: |
+    ═══════════════════════════════════════════════════════════════════════════
+    Z3 THEORY OPTIMIZATION GUIDANCE
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    MOST EFFICIENT THEORIES (prefer these):
+    1. Linear Integer Arithmetic (LIA) - for linear integer constraints
+    2. Linear Real Arithmetic (LRA) - for linear real constraints
+    3. Arrays - for array operations with select/store
+    4. Uninterpreted Functions (EUF) - for abstract functions
+    
+    MODERATE EFFICIENCY:
+    5. Bitvectors - for fixed-width integer operations
+    6. Algebraic Datatypes - for structured data
+    
+    USE WITH CAUTION (may be slow):
+    7. Nonlinear Arithmetic - for multiplication, exponentiation
+    8. Quantified Formulas - especially nested quantifiers
+    9. String Theory - limited solver support
+    
+    RECOMMENDATION FOR THIS SPECIFICATION:
+    Based on the problem domain and operations, prefer: {recommended_theory}
+    Reason: {reason}
+
+# ============================================================================
+# VALIDATION AND QUALITY PROMPTS
+# ============================================================================
+
+validation:
+  postcondition_quality_check: |
+    Review the generated postcondition for:
+    
+    1. **Mathematical Correctness**:
+       - Are quantifiers used correctly?
+       - Is the logic sound?
+       - Are all variables properly bounded?
+    
+    2. **Completeness**:
+       - Does it fully specify the property?
+       - Are there implicit assumptions?
+       - Are edge cases addressed?
+    
+    3. **Verifiability**:
+       - Can Z3 efficiently check this?
+       - Is the theory choice optimal?
+       - Are there decidability concerns?
+    
+    4. **Clarity**:
+       - Is the formal notation unambiguous?
+       - Is the natural language explanation clear?
+       - Do they match?
+    
+    5. **Practical Value**:
+       - Does this catch real bugs?
+       - Is it useful for verification?
+       - Is it too weak or too strong?
+    
+    Score each dimension 0-1 and provide specific feedback.
+  
+  z3_code_quality_check: |
+    Review the generated Z3 code for:
+    
+    1. **Correctness**:
+       - Does it accurately represent the postcondition?
+       - Are all variables declared?
+       - Are quantifiers properly bounded?
+    
+    2. **Executability**:
+       - Will this code run without errors?
+       - Are all Z3 functions used correctly?
+       - Is the syntax valid?
+    
+    3. **Completeness**:
+       - Are preconditions included?
+       - Are helper functions defined?
+       - Is the solver properly configured?
+    
+    4. **Efficiency**:
+       - Is the theory choice optimal?
+       - Are there unnecessary constraints?
+       - Can this be simplified?
+    
+    5. **Clarity**:
+       - Are comments helpful?
+       - Is output meaningful?
+       - Is structure clear?
+    
+    Provide specific improvement suggestions.
+
+# ============================================================================
+# EXAMPLES LIBRARY
+# ============================================================================
+
+examples:
+  sorting_example:
+    specification: "Sort an array of integers in ascending order"
+    
+    postconditions:
+      - formal: "∀i ∈ [0, |result|-1): result[i] ≤ result[i+1]"
+        explanation: "The output array is sorted in non-decreasing order"
+        strength: "standard"
+        z3_theory: "Linear Integer Arithmetic + Arrays"
+        edge_cases:
+          - "Empty array: trivially sorted"
+          - "Single element: already sorted"
+          - "All equal elements: maintains equality"
+      
+      - formal: "multiset(result) = multiset(input)"
+        explanation: "The output is a permutation of the input (same elements)"
+        strength: "comprehensive"
+        z3_theory: "Uninterpreted Functions + Arrays"
+        edge_cases:
+          - "Preserves all elements"
+          - "Preserves duplicates"
+          - "No elements added or removed"
+    
+    z3_code: |
+      from z3 import *
+      
+      # Variables
+      n = Int('n')
+      input_arr = Array('input', IntSort(), IntSort())
+      result_arr = Array('result', IntSort(), IntSort())
+      i = Int('i')
+      
+      # Sorted property
+      sorted_constraint = ForAll([i],
+          Implies(And(i >= 0, i < n - 1),
+                  Select(result_arr, i) <= Select(result_arr, i + 1)))
+      
+      # Solver
+      s = Solver()
+      s.add(n > 0)  # Precondition
+      s.add(sorted_constraint)
+      
+      assert s.check() == sat
+  
+  search_example:
+    specification: "Binary search for element in sorted array"
+    
+    postconditions:
+      - formal: "result ≥ 0 → arr[result] = target"
+        explanation: "If found, result points to the target element"
+        strength: "standard"
+        z3_theory: "Linear Integer Arithmetic + Arrays"
+        edge_cases:
+          - "Element found: returns valid index"
+          - "Element not found: handled by result < 0"
+      
+      - formal: "result < 0 → ∀i ∈ [0, n): arr[i] ≠ target"
+        explanation: "If not found, target is not in array"
+        strength: "comprehensive"
+        z3_theory: "Linear Integer Arithmetic + Arrays"
+        edge_cases:
+          - "Empty array: returns -1"
+          - "Target not present: returns -1"
+          - "Multiple occurrences: finds one"
