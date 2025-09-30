@@ -1,434 +1,243 @@
+#!/usr/bin/env python3
 """
-Pseudocode Generator Module
-
-This module replaces the original pseudocode.py (1200+ lines) with a clean
-interface using LangChain chains.
-
-Key improvements:
-- 95% code reduction (1200 lines → 60 lines)
-- Uses ChainFactory for LLM interactions
-- Automatic caching and retries
-- Type-safe with Pydantic models
-- Easy to test and maintain
-
-Original file: pseudocode.py
-New approach: Wrapper around core/chains.py
+Refactored Pseudocode Generator using PromptsManager
+Reduces code from 800+ lines to ~200 lines
 """
 
-from typing import Optional, Dict, Any, List
+import openai
+from typing import Dict, List, Optional, Any
+import logging
+import os
 from pathlib import Path
+from dotenv import load_dotenv
 import json
+from datetime import datetime
 
-from core.chains import ChainFactory
-from core.models import PseudocodeResult, Function
-from config.settings import settings
+from utils.prompt_loader import PromptsManager
+
+load_dotenv()
+logger = logging.getLogger(__name__)
 
 
 class PseudocodeGenerator:
-    """
-    Generate C pseudocode from natural language specifications.
+    """Simplified pseudocode generator using external prompts."""
     
-    This is a thin wrapper around ChainFactory that provides:
-    - Codebase analysis
-    - Context building
-    - Result caching
-    - Error handling
-    
-    Example:
-        >>> generator = PseudocodeGenerator()
-        >>> result = generator.generate("sort an array using bubble sort")
-        >>> print(result.functions[0].name)
-        'bubble_sort'
-    """
-    
-    def __init__(self, codebase_path: Optional[Path] = None):
-        """
-        Initialize the pseudocode generator.
+    def __init__(self, api_key: Optional[str] = None, prompts_file: str = "config/prompts.yaml"):
+        self.client = openai.OpenAI(
+            api_key=api_key or os.getenv("OPENAI_API_KEY")
+        )
+        self.prompts = PromptsManager(prompts_file)
         
-        Args:
-            codebase_path: Optional path to existing codebase for context
-        """
-        self.factory = ChainFactory()
-        self.codebase_path = codebase_path
-        self.codebase_context = None
-        
-        # Load codebase context if path provided
-        if codebase_path and Path(codebase_path).exists():
-            self.codebase_context = self._analyze_codebase(codebase_path)
-    
-    def generate(
-        self,
-        specification: str,
-        use_codebase_context: bool = True
-    ) -> PseudocodeResult:
+    def generate(self, 
+                 specification: str, 
+                 context: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Generate pseudocode from specification.
         
         Args:
-            specification: Natural language description of what to implement
-            use_codebase_context: Whether to include codebase context
-            
-        Returns:
-            PseudocodeResult with generated functions, structs, etc.
-            
-        Example:
-            >>> result = generator.generate("sort an array")
-            >>> for func in result.functions:
-            ...     print(f"{func.name}: {func.complexity}")
-        """
-        # Build context
-        context = None
-        if use_codebase_context and self.codebase_context:
-            context = self.codebase_context
-        
-        # Generate using chain
-        result = self.factory.pseudocode.generate(
-            specification=specification,
-            codebase_context=context
-        )
-        
-        return result
-    
-    async def agenerate(
-        self,
-        specification: str,
-        use_codebase_context: bool = True
-    ) -> PseudocodeResult:
-        """
-        Async version of generate() for parallel processing.
-        
-        Args:
             specification: Natural language description
-            use_codebase_context: Whether to include codebase context
+            context: Optional context (codebase analysis, functions, structs)
             
         Returns:
-            PseudocodeResult
+            Structured pseudocode result
         """
-        context = None
-        if use_codebase_context and self.codebase_context:
-            context = self.codebase_context
         
-        result = await self.factory.pseudocode.agenerate(
+        # Get prompt template from PromptsManager
+        template = self.prompts.get_pseudocode_prompt()
+        
+        # Build context string
+        context_str = self._build_context_string(context) if context else ""
+        
+        # Format prompt with variables
+        formatted = template.format(
             specification=specification,
-            codebase_context=context
+            context=context_str
         )
         
-        return result
+        system_prompt = formatted["system"]
+        user_prompt = formatted["human"]
+        
+        # Call OpenAI
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.3,
+                max_tokens=3000
+            )
+            
+            result = response.choices[0].message.content
+            return self._parse_result(result, specification)
+            
+        except Exception as e:
+            logger.error(f"Generation failed: {e}")
+            return self._generate_fallback(specification)
     
-    def generate_batch(
-        self,
-        specifications: List[str],
-        use_codebase_context: bool = True
-    ) -> List[PseudocodeResult]:
-        """
-        Generate pseudocode for multiple specifications in parallel.
+    def _build_context_string(self, context: Dict) -> str:
+        """Build context string from codebase analysis or direct specification."""
+        parts = []
         
-        Args:
-            specifications: List of specifications to process
-            use_codebase_context: Whether to include codebase context
+        if functions := context.get('function_names'):
+            parts.append(f"Available functions: {', '.join(functions[:15])}")
             
-        Returns:
-            List of PseudocodeResult objects
+        if structs := context.get('structs'):
+            struct_names = [s.get('name', 'unknown') for s in structs[:5]]
+            parts.append(f"Available structs: {', '.join(struct_names)}")
             
-        Example:
-            >>> specs = ["sort array", "search array", "reverse list"]
-            >>> results = generator.generate_batch(specs)
-            >>> print(f"Generated {len(results)} results")
-        """
-        import asyncio
+        if includes := context.get('includes'):
+            parts.append(f"Common includes: {', '.join(includes[:8])}")
         
-        async def _batch_generate():
-            tasks = [
-                self.agenerate(spec, use_codebase_context)
-                for spec in specifications
-            ]
-            return await asyncio.gather(*tasks)
-        
-        return asyncio.run(_batch_generate())
+        if patterns := context.get('patterns'):
+            parts.append(f"Common patterns: {', '.join(patterns[:5])}")
+            
+        return "\n".join(parts)
     
-    def save_result(
-        self,
-        result: PseudocodeResult,
-        output_path: Path,
-        format: str = "json"
-    ) -> Path:
-        """
-        Save pseudocode result to file.
-        
-        Args:
-            result: PseudocodeResult to save
-            output_path: Where to save the file
-            format: Output format ("json" or "markdown")
+    def _parse_result(self, result: str, original_prompt: str) -> Dict[str, Any]:
+        """Parse AI response into structured format."""
+        try:
+            # Extract JSON from response
+            json_start = result.find('{')
+            json_end = result.rfind('}') + 1
             
-        Returns:
-            Path to saved file
-        """
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        if format == "json":
-            with open(output_path, 'w') as f:
-                f.write(result.model_dump_json(indent=2))
-        
-        elif format == "markdown":
-            markdown = self._generate_markdown(result)
-            with open(output_path, 'w') as f:
-                f.write(markdown)
-        
-        else:
-            raise ValueError(f"Unsupported format: {format}")
-        
-        return output_path
-    
-    def load_result(self, path: Path) -> PseudocodeResult:
-        """
-        Load pseudocode result from file.
-        
-        Args:
-            path: Path to JSON file
-            
-        Returns:
-            PseudocodeResult
-        """
-        with open(path, 'r') as f:
-            return PseudocodeResult.model_validate_json(f.read())
-    
-    def _analyze_codebase(self, codebase_path: Path) -> Dict[str, Any]:
-        """
-        Analyze existing codebase to extract available functions.
-        
-        This is a simplified version. In production, you might want
-        to use a proper C parser or AST analyzer.
-        
-        Args:
-            codebase_path: Path to codebase directory
-            
-        Returns:
-            Dictionary with codebase context
-        """
-        context = {}
-        
-        # Find all C files
-        c_files = list(Path(codebase_path).glob("**/*.c"))
-        c_files.extend(list(Path(codebase_path).glob("**/*.h")))
-        
-        for file_path in c_files:
-            try:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
-                    
-                # Extract function names (simple regex approach)
-                import re
+            if json_start == -1 or json_end == 0:
+                raise ValueError("No JSON found in response")
                 
-                # Match function definitions: return_type function_name(params)
-                pattern = r'\b\w+\s+(\w+)\s*\([^)]*\)\s*{'
-                functions = re.findall(pattern, content)
+            json_str = result[json_start:json_end]
+            data = json.loads(json_str)
+            
+            # Add metadata
+            if 'metadata' not in data:
+                data['metadata'] = {}
                 
-                for func_name in functions:
-                    if func_name not in context:
-                        context[func_name] = {
-                            "description": f"Function from {file_path.name}",
-                            "file": str(file_path)
+            data['metadata'].update({
+                'original_prompt': original_prompt,
+                'generation_method': 'ai',
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            return {
+                'success': True,
+                'pseudocode': data,
+                'functions': [f['name'] for f in data.get('functions', [])],
+                'error': None
+            }
+            
+        except Exception as e:
+            logger.error(f"Parse error: {e}")
+            return self._generate_fallback(original_prompt)
+    
+    def _generate_fallback(self, specification: str) -> Dict[str, Any]:
+        """Generate minimal fallback pseudocode."""
+        func_name = self._extract_function_name(specification)
+        
+        return {
+            'success': False,
+            'pseudocode': {
+                'functions': [{
+                    'name': func_name,
+                    'description': f'Process: {specification}',
+                    'input_parameters': [
+                        {
+                            'name': 'data',
+                            'data_type': 'void*',
+                            'description': 'from caller providing generic input data'
                         }
-            
-            except Exception as e:
-                print(f"Warning: Could not analyze {file_path}: {e}")
-        
-        return context
+                    ],
+                    'output_parameters': [],
+                    'return_values': [
+                        {
+                            'name': 'result',
+                            'data_type': 'int',
+                            'description': 'returns 0 on success, -1 on error'
+                        }
+                    ],
+                    'body_blocks': [],
+                    'complexity': 'O(n)',
+                    'memory_usage': 'O(1)'
+                }],
+                'structs': [],
+                'enums': [],
+                'global_variables': [],
+                'includes': ['stdio.h', 'stdlib.h'],
+                'metadata': {
+                    'generation_method': 'fallback',
+                    'original_prompt': specification
+                }
+            },
+            'functions': [func_name],
+            'error': 'AI generation failed, using fallback'
+        }
     
-    def _generate_markdown(self, result: PseudocodeResult) -> str:
-        """
-        Generate markdown documentation from pseudocode result.
+    def _extract_function_name(self, specification: str) -> str:
+        """Extract likely function name from specification."""
+        spec_lower = specification.lower()
         
-        Args:
-            result: PseudocodeResult to document
-            
-        Returns:
-            Markdown string
-        """
-        lines = ["# Pseudocode Documentation\n"]
-        
-        # Functions
-        if result.functions:
-            lines.append("## Functions\n")
-            for func in result.functions:
-                lines.append(f"### {func.name}\n")
-                lines.append(f"**Description:** {func.description}\n")
-                lines.append(f"**Signature:** `{func.signature}`\n")
-                lines.append(f"**Complexity:** {func.complexity}\n")
-                lines.append(f"**Memory:** {func.memory_usage}\n")
-                
-                if func.input_parameters:
-                    lines.append("\n**Parameters:**")
-                    for param in func.input_parameters:
-                        lines.append(f"- `{param.name}` ({param.data_type}): {param.description}")
-                
-                if func.preconditions:
-                    lines.append("\n**Preconditions:**")
-                    for pre in func.preconditions:
-                        lines.append(f"- {pre}")
-                
-                if func.edge_cases:
-                    lines.append("\n**Edge Cases:**")
-                    for edge in func.edge_cases:
-                        lines.append(f"- {edge}")
-                
-                lines.append("")
-        
-        # Structs
-        if result.structs:
-            lines.append("## Data Structures\n")
-            for struct in result.structs:
-                lines.append(f"### {struct.name}\n")
-                lines.append(f"**Description:** {struct.description}\n")
-                
-                if struct.fields:
-                    lines.append("\n**Fields:**")
-                    for field in struct.fields:
-                        lines.append(f"- `{field.name}` ({field.data_type}): {field.description}")
-                
-                lines.append("")
-        
-        # Enums
-        if result.enums:
-            lines.append("## Enumerations\n")
-            for enum in result.enums:
-                lines.append(f"### {enum.name}\n")
-                lines.append(f"**Description:** {enum.description}\n")
-                
-                if enum.values:
-                    lines.append("\n**Values:**")
-                    for val in enum.values:
-                        val_str = f"{val.name}"
-                        if val.value is not None:
-                            val_str += f" = {val.value}"
-                        if val.description:
-                            val_str += f" - {val.description}"
-                        lines.append(f"- {val_str}")
-                
-                lines.append("")
-        
-        return "\n".join(lines)
+        if "sort" in spec_lower:
+            return "sort_array"
+        elif "search" in spec_lower or "find" in spec_lower:
+            return "search_element"
+        elif "reverse" in spec_lower:
+            return "reverse_data"
+        elif "calculate" in spec_lower or "compute" in spec_lower:
+            return "calculate_result"
+        elif "parse" in spec_lower:
+            return "parse_input"
+        elif "convert" in spec_lower:
+            return "convert_data"
+        else:
+            return "process_data"
 
 
-# ============================================================================
-# CONVENIENCE FUNCTIONS
-# ============================================================================
-
-def generate_pseudocode(
-    specification: str,
-    codebase_path: Optional[Path] = None
-) -> PseudocodeResult:
+# Backward compatible API
+def generate_pseudocode_api(prompt: str, 
+                            codebase_path: Optional[str] = None,
+                            api_key: Optional[str] = None) -> Dict[str, Any]:
     """
-    Convenience function to generate pseudocode.
-    
-    Args:
-        specification: What to implement
-        codebase_path: Optional path to existing codebase
-        
-    Returns:
-        PseudocodeResult
-        
-    Example:
-        >>> result = generate_pseudocode("sort an array")
-        >>> print(result.functions[0].name)
+    Drop-in replacement for old generate_pseudocode_api.
+    Note: codebase_path is accepted for backward compatibility but not used in refactored version.
     """
-    generator = PseudocodeGenerator(codebase_path=codebase_path)
-    return generator.generate(specification)
+    generator = PseudocodeGenerator(api_key)
+    
+    # Simple context from just the codebase path
+    context = None
+    if codebase_path:
+        logger.info(f"Codebase path provided: {codebase_path} (note: analysis requires original CodebaseAnalyzer)")
+    
+    return generator.generate(prompt, context)
 
 
-def generate_pseudocode_batch(
-    specifications: List[str],
-    codebase_path: Optional[Path] = None
-) -> List[PseudocodeResult]:
+def generate_with_context_api(prompt: str, 
+                              codebase_path: Optional[str] = None,
+                              available_functions: Optional[List[str]] = None,
+                              available_structs: Optional[List[str]] = None,
+                              includes: Optional[List[str]] = None,
+                              api_key: Optional[str] = None) -> Dict[str, Any]:
     """
-    Generate pseudocode for multiple specifications in parallel.
-    
-    Args:
-        specifications: List of specifications
-        codebase_path: Optional path to existing codebase
-        
-    Returns:
-        List of PseudocodeResult objects
-        
-    Example:
-        >>> specs = ["sort array", "search array"]
-        >>> results = generate_pseudocode_batch(specs)
+    Enhanced API with direct context specification.
     """
-    generator = PseudocodeGenerator(codebase_path=codebase_path)
-    return generator.generate_batch(specifications)
-
-
-# ============================================================================
-# EXAMPLE USAGE
-# ============================================================================
-
-if __name__ == "__main__":
-    print("=" * 70)
-    print("PSEUDOCODE GENERATOR - EXAMPLE USAGE")
-    print("=" * 70)
+    generator = PseudocodeGenerator(api_key)
     
-    # Example 1: Simple generation
-    print("\n📝 Example 1: Generate pseudocode for bubble sort")
-    print("-" * 70)
+    # Build context from provided parameters
+    context = None
+    if available_functions or available_structs or includes:
+        context = {
+            'function_names': available_functions or [],
+            'structs': [{'name': s} for s in (available_structs or [])],
+            'includes': includes or [],
+            'patterns': []
+        }
     
-    generator = PseudocodeGenerator()
-    result = generator.generate("sort an array using bubble sort algorithm")
+    result = generator.generate(prompt, context)
     
-    print(f"✅ Generated {len(result.functions)} function(s)")
+    # Add additional metadata
+    result['context_info'] = {
+        'type': 'direct_specification',
+        'has_codebase': codebase_path is not None,
+        'has_functions': bool(available_functions),
+        'has_structs': bool(available_structs)
+    }
     
-    for func in result.functions:
-        print(f"\nFunction: {func.name}")
-        print(f"  Signature: {func.signature}")
-        print(f"  Description: {func.description}")
-        print(f"  Complexity: {func.complexity}")
-        print(f"  Memory: {func.memory_usage}")
-        print(f"  Parameters: {len(func.input_parameters)}")
-        print(f"  Edge Cases: {len(func.edge_cases)}")
-    
-    # Example 2: Save to file
-    print("\n💾 Example 2: Save result to file")
-    print("-" * 70)
-    
-    output_path = Path("output/bubble_sort_pseudocode.json")
-    saved_path = generator.save_result(result, output_path, format="json")
-    print(f"✅ Saved to: {saved_path}")
-    
-    # Also save as markdown
-    md_path = Path("output/bubble_sort_pseudocode.md")
-    generator.save_result(result, md_path, format="markdown")
-    print(f"✅ Saved markdown to: {md_path}")
-    
-    # Example 3: Batch generation
-    print("\n🚀 Example 3: Batch generation (parallel)")
-    print("-" * 70)
-    
-    specifications = [
-        "sort an array",
-        "search for an element in array",
-        "reverse a linked list"
-    ]
-    
-    print(f"Processing {len(specifications)} specifications in parallel...")
-    results = generator.generate_batch(specifications)
-    
-    print(f"✅ Generated {len(results)} results")
-    for i, (spec, result) in enumerate(zip(specifications, results)):
-        func_count = len(result.functions)
-        print(f"  {i+1}. '{spec}' → {func_count} function(s)")
-    
-    # Example 4: With codebase context
-    print("\n🔍 Example 4: With codebase context")
-    print("-" * 70)
-    
-    # If you have an existing codebase
-    # generator_with_context = PseudocodeGenerator(codebase_path=Path("./existing_code"))
-    # result = generator_with_context.generate("implement a new sorting function")
-    # This will use functions from your existing codebase!
-    
-    print("Note: To use codebase context, provide path to existing C code:")
-    print("  generator = PseudocodeGenerator(codebase_path=Path('./my_code'))")
-    
-    print("\n" + "=" * 70)
-    print("✅ ALL EXAMPLES COMPLETED")
-    print("=" * 70)
+    return result

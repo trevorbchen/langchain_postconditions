@@ -1,534 +1,256 @@
+#!/usr/bin/env python3
 """
-Logic Generator Module
-
-This module replaces the original logic_generator.py (3000+ lines) with a clean
-interface using LangChain chains.
-
-Key improvements:
-- 97% code reduction (3000 lines → 90 lines)
-- Uses ChainFactory for LLM interactions
-- Automatic edge case analysis
-- Quality assessment built-in
-- Type-safe with Pydantic models
-- Async support for parallel processing
-
-Original file: logic_generator.py
-New approach: Wrapper around core/chains.py
+Refactored Postcondition Generator using PromptsManager
+Reduces code from 3000+ lines to ~300 lines
 """
 
-from typing import List, Optional, Dict, Any
-from pathlib import Path
-import asyncio
+import openai
+from typing import Dict, List, Optional, Any
+import logging
+import os
+from dotenv import load_dotenv
+import json
+import sqlite3
 
-from core.chains import ChainFactory
-from core.models import (
-    Function,
-    EnhancedPostcondition,
-    PostconditionStrength,
-    PostconditionCategory
-)
-from config.settings import settings
+from utils.prompt_loader import PromptsManager
+
+load_dotenv()
+logger = logging.getLogger(__name__)
 
 
 class PostconditionGenerator:
-    """
-    Generate formal postconditions from function specifications.
+    """Simplified postcondition generator using external prompts."""
     
-    This replaces the massive EnhancedPostconditionGenerator class with
-    a clean wrapper around ChainFactory that provides:
-    - Automatic edge case analysis
-    - Quality assessment
-    - Multiple postcondition strengths
-    - Category classification
+    def __init__(self, 
+                 context_db_path: str = "context.db",
+                 api_key: Optional[str] = None,
+                 prompts_file: str = "config/prompts.yaml"):
+        
+        self.client = openai.OpenAI(
+            api_key=api_key or os.getenv("OPENAI_API_KEY")
+        )
+        self.prompts = PromptsManager(prompts_file)
+        self.context_db_path = context_db_path
+        
+        # Load domain knowledge once
+        self.domain_knowledge = self._load_domain_knowledge()
     
-    Example:
-        >>> generator = PostconditionGenerator()
-        >>> postconditions = generator.generate(bubble_sort_func, "Sort array")
-        >>> for pc in postconditions:
-        ...     print(f"{pc.category}: {pc.natural_language}")
-    """
-    
-    def __init__(self):
-        """Initialize the postcondition generator."""
-        self.factory = ChainFactory()
-    
-    def generate(
-        self,
-        function: Function,
-        specification: str,
-        strength: PostconditionStrength = PostconditionStrength.COMPREHENSIVE,
-        analyze_edge_cases: bool = True
-    ) -> List[EnhancedPostcondition]:
+    def generate(self,
+                 specification: str,
+                 function: Dict[str, Any],
+                 edge_cases: Optional[List[str]] = None,
+                 strength: str = "standard") -> List[Dict[str, Any]]:
         """
         Generate postconditions for a function.
         
         Args:
-            function: Function model to generate postconditions for
-            specification: Original specification text
-            strength: Desired postcondition strength level
-            analyze_edge_cases: Whether to analyze edge cases first
+            specification: Original natural language specification
+            function: Pseudocode function dictionary
+            edge_cases: Optional list of edge cases to address
+            strength: "minimal", "standard", or "comprehensive"
             
         Returns:
-            List of EnhancedPostcondition objects with quality metrics
-            
-        Example:
-            >>> func = Function(name="sort", description="Sort array", ...)
-            >>> pcs = generator.generate(func, "Sort in ascending order")
-            >>> print(f"Generated {len(pcs)} postconditions")
+            List of postcondition dictionaries
         """
-        # Step 1: Analyze edge cases if requested
-        edge_cases = []
-        if analyze_edge_cases:
-            edge_cases = self._analyze_edge_cases(function, specification)
         
-        # Step 2: Generate postconditions using chain
-        postconditions = self.factory.postcondition.generate(
-            function=function,
+        # Get prompt template using PromptsManager
+        template = self.prompts.get_postcondition_prompt()
+        
+        # Build comprehensive context
+        func_context = self._build_function_context(function)
+        edge_context = self._build_edge_case_context(edge_cases or [])
+        domain_context = self._build_domain_context(specification)
+        
+        # Format the prompt using template.format()
+        formatted = template.format(
             specification=specification,
-            edge_cases=edge_cases
+            function_context=func_context,
+            variable_context=self._format_variables(function),
+            domain_knowledge=domain_context,
+            edge_case_analysis=edge_context
         )
         
-        # Step 3: Filter by strength if specified
-        if strength != PostconditionStrength.COMPREHENSIVE:
-            postconditions = self._filter_by_strength(postconditions, strength)
+        system_prompt = formatted["system"]
+        user_prompt = formatted["human"]
         
-        # Step 4: Assess quality (already done by chain, but we can enhance)
-        postconditions = self._enhance_quality_metrics(postconditions)
-        
-        return postconditions
-    
-    async def agenerate(
-        self,
-        function: Function,
-        specification: str,
-        strength: PostconditionStrength = PostconditionStrength.COMPREHENSIVE,
-        analyze_edge_cases: bool = True
-    ) -> List[EnhancedPostcondition]:
-        """
-        Async version of generate() for parallel processing.
-        
-        Args:
-            function: Function to generate postconditions for
-            specification: Original specification
-            strength: Desired strength level
-            analyze_edge_cases: Whether to analyze edge cases
-            
-        Returns:
-            List of EnhancedPostcondition objects
-        """
-        # Step 1: Analyze edge cases
-        edge_cases = []
-        if analyze_edge_cases:
-            edge_cases = self._analyze_edge_cases(function, specification)
-        
-        # Step 2: Generate using async chain
-        postconditions = await self.factory.postcondition.agenerate(
-            function=function,
-            specification=specification,
-            edge_cases=edge_cases
-        )
-        
-        # Step 3: Filter and enhance
-        if strength != PostconditionStrength.COMPREHENSIVE:
-            postconditions = self._filter_by_strength(postconditions, strength)
-        
-        postconditions = self._enhance_quality_metrics(postconditions)
-        
-        return postconditions
-    
-    def generate_for_multiple_functions(
-        self,
-        functions: List[Function],
-        specification: str,
-        strength: PostconditionStrength = PostconditionStrength.COMPREHENSIVE
-    ) -> Dict[str, List[EnhancedPostcondition]]:
-        """
-        Generate postconditions for multiple functions in parallel.
-        
-        Args:
-            functions: List of functions to process
-            specification: Original specification
-            strength: Desired strength level
-            
-        Returns:
-            Dictionary mapping function names to their postconditions
-            
-        Example:
-            >>> functions = [func1, func2, func3]
-            >>> results = generator.generate_for_multiple_functions(functions, spec)
-            >>> for name, pcs in results.items():
-            ...     print(f"{name}: {len(pcs)} postconditions")
-        """
-        async def _batch_generate():
-            tasks = [
-                self.agenerate(func, specification, strength)
-                for func in functions
-            ]
-            results = await asyncio.gather(*tasks)
-            return {
-                func.name: pcs 
-                for func, pcs in zip(functions, results)
-            }
-        
-        return asyncio.run(_batch_generate())
-    
-    def generate_by_category(
-        self,
-        function: Function,
-        specification: str,
-        categories: Optional[List[PostconditionCategory]] = None
-    ) -> Dict[PostconditionCategory, List[EnhancedPostcondition]]:
-        """
-        Generate postconditions grouped by category.
-        
-        Args:
-            function: Function to analyze
-            specification: Original specification
-            categories: Specific categories to generate (None = all)
-            
-        Returns:
-            Dictionary mapping categories to postconditions
-            
-        Example:
-            >>> results = generator.generate_by_category(func, spec)
-            >>> for category, pcs in results.items():
-            ...     print(f"{category}: {len(pcs)} postconditions")
-        """
-        # Generate all postconditions
-        all_postconditions = self.generate(function, specification)
-        
-        # Group by category
-        by_category: Dict[PostconditionCategory, List[EnhancedPostcondition]] = {}
-        
-        for pc in all_postconditions:
-            if categories is None or pc.category in categories:
-                if pc.category not in by_category:
-                    by_category[pc.category] = []
-                by_category[pc.category].append(pc)
-        
-        return by_category
-    
-    def _analyze_edge_cases(
-        self,
-        function: Function,
-        specification: str
-    ) -> List[str]:
-        """
-        Analyze and identify edge cases for the function.
-        
-        Uses the EdgeCaseChain to automatically identify edge cases.
-        
-        Args:
-            function: Function to analyze
-            specification: Original specification
-            
-        Returns:
-            List of edge case descriptions
-        """
-        # Use existing edge cases from function if available
-        if function.edge_cases:
-            return function.edge_cases
-        
-        # Otherwise, analyze using chain
-        edge_cases = self.factory.edge_case.analyze(
-            specification=specification,
-            function=function
-        )
-        
-        return edge_cases
-    
-    def _filter_by_strength(
-        self,
-        postconditions: List[EnhancedPostcondition],
-        strength: PostconditionStrength
-    ) -> List[EnhancedPostcondition]:
-        """
-        Filter postconditions by strength level.
-        
-        Args:
-            postconditions: All postconditions
-            strength: Desired strength level
-            
-        Returns:
-            Filtered list of postconditions
-        """
-        return [
-            pc for pc in postconditions 
-            if pc.strength == strength
-        ]
-    
-    def _enhance_quality_metrics(
-        self,
-        postconditions: List[EnhancedPostcondition]
-    ) -> List[EnhancedPostcondition]:
-        """
-        Enhance quality metrics for postconditions.
-        
-        The chain already provides basic quality scores, but we can
-        add additional analysis here if needed.
-        
-        Args:
-            postconditions: Postconditions to enhance
-            
-        Returns:
-            Enhanced postconditions
-        """
-        for pc in postconditions:
-            # Calculate overall quality if not set
-            if pc.overall_quality_score == 0.0:
-                pc.overall_quality_score = (
-                    pc.clarity_score * 0.3 +
-                    pc.completeness_score * 0.3 +
-                    pc.testability_score * 0.4
-                )
-            
-            # Add suggestions if quality is low
-            if pc.overall_quality_score < 0.7:
-                if pc.clarity_score < 0.7:
-                    pc.suggestions_for_improvement.append(
-                        "Consider making the formal text more precise"
-                    )
-                if pc.completeness_score < 0.7:
-                    pc.suggestions_for_improvement.append(
-                        "Consider adding more edge cases"
-                    )
-                if pc.testability_score < 0.7:
-                    pc.suggestions_for_improvement.append(
-                        "Consider making conditions more testable"
-                    )
-        
-        return postconditions
-    
-    def get_quality_report(
-        self,
-        postconditions: List[EnhancedPostcondition]
-    ) -> Dict[str, Any]:
-        """
-        Generate a quality report for a set of postconditions.
-        
-        Args:
-            postconditions: Postconditions to analyze
-            
-        Returns:
-            Quality report dictionary
-            
-        Example:
-            >>> report = generator.get_quality_report(postconditions)
-            >>> print(f"Average quality: {report['average_quality']:.2f}")
-        """
-        if not postconditions:
-            return {
-                "total": 0,
-                "average_quality": 0.0,
-                "by_category": {},
-                "by_strength": {},
-                "high_quality_count": 0,
-                "needs_improvement_count": 0
-            }
-        
-        # Calculate statistics
-        total = len(postconditions)
-        avg_quality = sum(pc.overall_quality_score for pc in postconditions) / total
-        
-        # Group by category
-        by_category = {}
-        for pc in postconditions:
-            cat = pc.category.value
-            if cat not in by_category:
-                by_category[cat] = []
-            by_category[cat].append(pc.overall_quality_score)
-        
-        # Group by strength
-        by_strength = {}
-        for pc in postconditions:
-            strength = pc.strength.value
-            if strength not in by_strength:
-                by_strength[strength] = 0
-            by_strength[strength] += 1
-        
-        # Quality thresholds
-        high_quality = sum(1 for pc in postconditions if pc.overall_quality_score >= 0.8)
-        needs_improvement = sum(1 for pc in postconditions if pc.overall_quality_score < 0.7)
-        
-        return {
-            "total": total,
-            "average_quality": avg_quality,
-            "by_category": {
-                cat: sum(scores) / len(scores)
-                for cat, scores in by_category.items()
-            },
-            "by_strength": by_strength,
-            "high_quality_count": high_quality,
-            "needs_improvement_count": needs_improvement,
-            "confidence_range": {
-                "min": min(pc.confidence_score for pc in postconditions),
-                "max": max(pc.confidence_score for pc in postconditions),
-                "avg": sum(pc.confidence_score for pc in postconditions) / total
-            }
-        }
-
-
-# ============================================================================
-# CONVENIENCE FUNCTIONS
-# ============================================================================
-
-def generate_postconditions(
-    function: Function,
-    specification: str,
-    strength: PostconditionStrength = PostconditionStrength.COMPREHENSIVE
-) -> List[EnhancedPostcondition]:
-    """
-    Convenience function to generate postconditions.
-    
-    Args:
-        function: Function to analyze
-        specification: Original specification
-        strength: Desired strength level
-        
-    Returns:
-        List of EnhancedPostcondition objects
-        
-    Example:
-        >>> from core.models import Function, FunctionParameter
-        >>> func = Function(name="sort", description="Sort array", ...)
-        >>> pcs = generate_postconditions(func, "Sort in ascending order")
-    """
-    generator = PostconditionGenerator()
-    return generator.generate(function, specification, strength)
-
-
-def generate_postconditions_batch(
-    functions: List[Function],
-    specification: str
-) -> Dict[str, List[EnhancedPostcondition]]:
-    """
-    Generate postconditions for multiple functions in parallel.
-    
-    Args:
-        functions: List of functions
-        specification: Original specification
-        
-    Returns:
-        Dictionary mapping function names to postconditions
-        
-    Example:
-        >>> results = generate_postconditions_batch([func1, func2], spec)
-    """
-    generator = PostconditionGenerator()
-    return generator.generate_for_multiple_functions(functions, specification)
-
-
-# ============================================================================
-# EXAMPLE USAGE
-# ============================================================================
-
-if __name__ == "__main__":
-    from core.models import FunctionParameter
-    
-    print("=" * 70)
-    print("POSTCONDITION GENERATOR - EXAMPLE USAGE")
-    print("=" * 70)
-    
-    # Example 1: Generate postconditions for bubble sort
-    print("\n📝 Example 1: Generate postconditions for bubble sort")
-    print("-" * 70)
-    
-    bubble_sort = Function(
-        name="bubble_sort",
-        description="Sort an array in ascending order using bubble sort",
-        return_type="void",
-        input_parameters=[
-            FunctionParameter(
-                name="arr",
-                data_type="int[]",
-                description="Array to sort"
-            ),
-            FunctionParameter(
-                name="size",
-                data_type="int",
-                description="Size of the array"
+        # Generate postconditions
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.3,
+                max_tokens=2500
             )
-        ],
-        complexity="O(n^2)",
-        memory_usage="O(1)"
-    )
+            
+            return self._parse_postconditions(response.choices[0].message.content)
+            
+        except Exception as e:
+            logger.error(f"Postcondition generation failed: {e}")
+            return self._generate_fallback_postconditions(function)
     
-    generator = PostconditionGenerator()
-    postconditions = generator.generate(
-        function=bubble_sort,
-        specification="Sort the array in ascending order"
-    )
+    def _build_function_context(self, function: Dict) -> str:
+        """Build function context using PromptsManager helper."""
+        return self.prompts.build_function_context(
+            name=function.get('name', 'unknown'),
+            description=function.get('description', ''),
+            input_params=function.get('input_parameters', []),
+            output_params=function.get('output_parameters', []),
+            return_values=function.get('return_values', []),
+            preconditions=function.get('preconditions', [])
+        )
     
-    print(f"✅ Generated {len(postconditions)} postconditions")
+    def _build_edge_case_context(self, edge_cases: List[str]) -> str:
+        """Build edge case context."""
+        if not edge_cases:
+            edge_case_dict = {
+                'input_edge_cases': ['Standard input assumed'],
+                'output_edge_cases': [],
+                'algorithmic_edge_cases': [],
+                'mathematical_edge_cases': [],
+                'boundary_conditions': [],
+                'error_conditions': [],
+                'performance_edge_cases': [],
+                'domain_specific_cases': [],
+                'coverage_score': 0.5,
+                'completeness_assessment': 'Minimal edge case analysis'
+            }
+        else:
+            # Organize edge cases into categories
+            edge_case_dict = {
+                'input_edge_cases': edge_cases[:3],
+                'output_edge_cases': edge_cases[3:5] if len(edge_cases) > 3 else [],
+                'algorithmic_edge_cases': edge_cases[5:7] if len(edge_cases) > 5 else [],
+                'mathematical_edge_cases': [],
+                'boundary_conditions': [],
+                'error_conditions': [],
+                'performance_edge_cases': [],
+                'domain_specific_cases': [],
+                'coverage_score': min(len(edge_cases) / 10.0, 1.0),
+                'completeness_assessment': f'{len(edge_cases)} edge cases identified'
+            }
+        
+        return self.prompts.build_edge_case_context(edge_case_dict)
     
-    for i, pc in enumerate(postconditions[:3]):  # Show first 3
-        print(f"\n{i+1}. {pc.natural_language}")
-        print(f"   Category: {pc.category.value}")
-        print(f"   Strength: {pc.strength.value}")
-        print(f"   Formal: {pc.formal_text}")
-        print(f"   Confidence: {pc.confidence_score:.2f}")
-        print(f"   Quality: {pc.overall_quality_score:.2f}")
+    def _build_domain_context(self, specification: str) -> str:
+        """Build domain context using PromptsManager."""
+        domain = self._infer_domain(specification)
+        return self.prompts.build_domain_context(domain)
     
-    # Example 2: Generate by category
-    print("\n📊 Example 2: Generate postconditions by category")
-    print("-" * 70)
+    def _format_variables(self, function: Dict) -> str:
+        """Format variable context for prompt."""
+        inputs = function.get('input_parameters', [])
+        outputs = function.get('output_parameters', [])
+        returns = function.get('return_values', [])
+        
+        parts = []
+        if inputs:
+            parts.append(f"Inputs: {', '.join([p['name'] for p in inputs])}")
+        if outputs:
+            parts.append(f"Outputs: {', '.join([p['name'] for p in outputs])}")
+        if returns:
+            parts.append(f"Returns: {', '.join([r.get('name', 'result') for r in returns])}")
+        
+        return "; ".join(parts)
     
-    by_category = generator.generate_by_category(
-        function=bubble_sort,
-        specification="Sort array"
-    )
+    def _parse_postconditions(self, response: str) -> List[Dict[str, Any]]:
+        """Parse AI response into postcondition list."""
+        try:
+            # Extract JSON array
+            json_start = response.find('[')
+            json_end = response.rfind(']') + 1
+            
+            if json_start == -1:
+                raise ValueError("No JSON array found")
+            
+            postconditions = json.loads(response[json_start:json_end])
+            
+            # Validate structure
+            for pc in postconditions:
+                if 'formal_text' not in pc or 'natural_language_explanation' not in pc:
+                    raise ValueError("Missing required fields in postcondition")
+            
+            return postconditions
+            
+        except Exception as e:
+            logger.error(f"Failed to parse postconditions: {e}")
+            return []
     
-    for category, pcs in by_category.items():
-        print(f"\n{category.value.upper()}: {len(pcs)} postcondition(s)")
-        for pc in pcs:
-            print(f"  - {pc.natural_language}")
+    def _load_domain_knowledge(self) -> Dict[str, Dict]:
+        """Load domain knowledge from database."""
+        knowledge = {}
+        try:
+            conn = sqlite3.connect(self.context_db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT domain, patterns, examples FROM domain_contexts")
+            for row in cursor.fetchall():
+                domain, patterns, examples = row
+                knowledge[domain] = {
+                    'patterns': json.loads(patterns) if patterns else [],
+                    'examples': json.loads(examples) if examples else []
+                }
+            
+            conn.close()
+            
+        except Exception as e:
+            logger.warning(f"Could not load domain knowledge: {e}")
+        
+        return knowledge
     
-    # Example 3: Quality report
-    print("\n📈 Example 3: Quality report")
-    print("-" * 70)
+    def _infer_domain(self, specification: str) -> str:
+        """Infer domain from specification text."""
+        spec_lower = specification.lower()
+        
+        # Get all available domains from PromptsManager
+        available_domains = self.prompts.get_all_domains()
+        
+        # Map keywords to domains
+        domain_keywords = {
+            'collections': ['sort', 'array', 'list', 'queue', 'stack', 'tree'],
+            'algorithms': ['search', 'find', 'binary', 'traverse', 'dfs', 'bfs'],
+            'strings': ['parse', 'string', 'text', 'concat', 'substring'],
+            'numerical': ['calculate', 'compute', 'sum', 'average', 'min', 'max'],
+            'graphs': ['graph', 'node', 'edge', 'path', 'cycle']
+        }
+        
+        # Check which domain matches best
+        for domain, keywords in domain_keywords.items():
+            if domain in available_domains:
+                if any(word in spec_lower for word in keywords):
+                    return domain
+        
+        # Default to first available domain or 'collections'
+        return available_domains[0] if available_domains else 'collections'
     
-    report = generator.get_quality_report(postconditions)
+    def _generate_fallback_postconditions(self, function: Dict) -> List[Dict]:
+        """Generate minimal fallback postconditions."""
+        return [{
+            'formal_text': 'result != NULL',
+            'natural_language_explanation': 'The function returns a valid result',
+            'precise_translation': 'The result is not null',
+            'strength': 'minimal',
+            'confidence_score': 0.5,
+            'z3_theory': 'unknown'
+        }]
+
+
+# Backward compatible API
+def generate_postconditions_api(specification: str,
+                                function_dict: Dict,
+                                context_db: str = "context.db",
+                                api_key: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Drop-in replacement for old API.
+    """
+    generator = PostconditionGenerator(context_db, api_key)
+    postconditions = generator.generate(specification, function_dict)
     
-    print(f"Total postconditions: {report['total']}")
-    print(f"Average quality: {report['average_quality']:.2f}")
-    print(f"High quality (≥0.8): {report['high_quality_count']}")
-    print(f"Needs improvement (<0.7): {report['needs_improvement_count']}")
-    
-    print("\nBy category:")
-    for cat, quality in report['by_category'].items():
-        print(f"  {cat}: {quality:.2f}")
-    
-    print("\nConfidence range:")
-    print(f"  Min: {report['confidence_range']['min']:.2f}")
-    print(f"  Max: {report['confidence_range']['max']:.2f}")
-    print(f"  Avg: {report['confidence_range']['avg']:.2f}")
-    
-    # Example 4: Batch processing
-    print("\n🚀 Example 4: Batch processing multiple functions")
-    print("-" * 70)
-    
-    search_func = Function(
-        name="binary_search",
-        description="Search for element in sorted array",
-        return_type="int",
-        input_parameters=[
-            FunctionParameter(name="arr", data_type="int[]"),
-            FunctionParameter(name="size", data_type="int"),
-            FunctionParameter(name="target", data_type="int")
-        ]
-    )
-    
-    functions = [bubble_sort, search_func]
-    results = generator.generate_for_multiple_functions(
-        functions=functions,
-        specification="Implement sorting and searching"
-    )
-    
-    for func_name, pcs in results.items():
-        print(f"\n{func_name}: {len(pcs)} postcondition(s)")
-        for pc in pcs[:2]:  # Show first 2
-            print(f"  - {pc.natural_language}")
-    
-    print("\n" + "=" * 70)
-    print("✅ ALL EXAMPLES COMPLETED")
-    print("=" * 70)
+    return {
+        'success': len(postconditions) > 0,
+        'postconditions': postconditions,
+        'count': len(postconditions),
+        'error': None if postconditions else 'Generation failed'
+    }

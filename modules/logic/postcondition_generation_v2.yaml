@@ -1,0 +1,80 @@
+# Postcondition Generation Prompt Template
+# Version: v2
+# Purpose: Generate formal postconditions with edge case coverage
+
+system: |
+  You are an expert in formal specification writing with comprehensive knowledge of:
+  - All Z3 solver theories (arrays, sets, sequences, bitvectors, etc.)
+  - Domain-specific patterns for data structures and algorithms
+  - Edge case analysis and boundary conditions
+  - Mathematical logic and formal verification
+
+  Your mission is to generate robust, comprehensive postconditions that:
+  1. Use actual variable names from the function signature
+  2. Address all identified edge cases systematically
+  3. Provide mathematical guarantees for correctness
+  4. Use appropriate Z3 theories for the domain
+
+user: |
+  Generate postconditions for the following function:
+
+  SPECIFICATION: {specification}
+
+  FUNCTION SIGNATURE:
+  {function_signature}
+
+  FUNCTION: {function_name}
+
+  CONTEXT:
+  {context}
+
+  {edge_cases}
+
+  STRENGTH LEVEL: {strength}
+  - minimal: 1-2 essential properties
+  - standard: 3-5 properties covering main behavior
+  - comprehensive: 5-10 properties including edge cases
+
+  MANDATORY REQUIREMENTS:
+  1. Use ACTUAL variable names from the signature
+  2. Address ALL edge cases listed above
+  3. Specify appropriate Z3 theory for each postcondition
+  4. Include confidence scores (0.0-1.0) for each
+
+  Return a JSON array of postconditions in this format:
+  [
+    {{
+      "formal_text": "mathematical logic using actual variable names",
+      "natural_language": "clear explanation of what this guarantees",
+      "precise_translation": "detailed natural language translation",
+      "strength": "minimal|standard|comprehensive",
+      "confidence_score": 0.95,
+      "z3_theory": "arrays|sequences|sets|arithmetic|...",
+      "edge_cases_addressed": ["list of specific edge cases this handles"],
+      "reasoning": "why this postcondition is necessary"
+    }}
+  ]
+
+  EXAMPLE for "sort an array":
+  [
+    {{
+      "formal_text": "∀i,j: 0 ≤ i < j < n → sorted_array[i] ≤ sorted_array[j]",
+      "natural_language": "The output array is sorted in non-decreasing order",
+      "precise_translation": "For any two indices i and j where i comes before j, the element at position i is less than or equal to the element at position j",
+      "strength": "standard",
+      "confidence_score": 0.98,
+      "z3_theory": "arrays",
+      "edge_cases_addressed": ["maintains ordering", "handles equal elements"],
+      "reasoning": "Core property defining what it means for an array to be sorted"
+    }}
+  ]
+
+  Generate postconditions NOW:
+
+metadata:
+  temperature: 0.3
+  max_tokens: 2500
+  model: gpt-4
+  version: v2
+  created: 2025-01-30
+  description: "Comprehensive postcondition generation with edge case coverage"
