@@ -6,10 +6,18 @@ to all templates with variable interpolation.
 """
 
 import yaml
+import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
+from dotenv import load_dotenv
 
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+# Load .env file
+load_dotenv(project_root / ".env")
 
 @dataclass
 class PromptTemplate:
@@ -40,7 +48,11 @@ class PromptsManager:
     """
     
     def __init__(self, prompts_file: str = "config/prompts.yaml"):
+        # Handle both absolute and relative paths
         self.prompts_file = Path(prompts_file)
+        if not self.prompts_file.is_absolute():
+            self.prompts_file = project_root / self.prompts_file
+        
         self.prompts = self._load_prompts()
     
     def _load_prompts(self) -> Dict[str, Any]:
@@ -138,11 +150,7 @@ class PromptsManager:
         return_values: List[Dict[str, Any]],
         preconditions: List[str]
     ) -> str:
-        """
-        Build function signature context for prompt.
-        
-        This replaces the manual context building in your original code.
-        """
+        """Build function signature context for prompt."""
         template = self.prompts['context_building']['function_signature_template']
         
         # Format parameters
@@ -180,15 +188,7 @@ class PromptsManager:
         )
     
     def build_edge_case_context(self, edge_case_analysis: Dict[str, Any]) -> str:
-        """
-        Build edge case analysis context for prompt.
-        
-        Args:
-            edge_case_analysis: Dictionary with edge case categories
-        
-        Returns:
-            Formatted context string
-        """
+        """Build edge case analysis context for prompt."""
         template = self.prompts['context_building']['edge_case_template']
         
         def format_cases(cases: List[str]) -> str:
@@ -209,15 +209,7 @@ class PromptsManager:
         )
     
     def build_domain_context(self, domain: str) -> str:
-        """
-        Build domain knowledge context for prompt.
-        
-        Args:
-            domain: Domain name
-        
-        Returns:
-            Formatted domain context
-        """
+        """Build domain knowledge context for prompt."""
         template = self.prompts['context_building']['domain_knowledge_template']
         knowledge = self.get_domain_knowledge(domain)
         
@@ -253,12 +245,7 @@ class PromptsManager:
         z3_guidance: str,
         examples: str = ""
     ) -> str:
-        """
-        Build complete context for postcondition generation.
-        
-        This is the comprehensive context that replaces the 500+ line
-        context building in your original logic_generator.py.
-        """
+        """Build complete context for postcondition generation."""
         template = self.prompts['context_building']['full_context_template']
         return template.format(
             function_signature=function_context,
@@ -285,15 +272,7 @@ class PromptsManager:
     # ========================================================================
     
     def get_example(self, example_name: str) -> Dict[str, Any]:
-        """
-        Get a complete example (specification, postconditions, Z3 code).
-        
-        Args:
-            example_name: Name of example (e.g., 'sorting_example', 'search_example')
-        
-        Returns:
-            Complete example data
-        """
+        """Get a complete example."""
         return self.prompts['examples'].get(example_name, {})
     
     def get_all_examples(self) -> List[str]:
@@ -302,420 +281,34 @@ class PromptsManager:
 
 
 # ============================================================================
-# USAGE EXAMPLES
-# ============================================================================
-
-def example_usage():
-    """Demonstrate how to use the PromptsManager."""
-    
-    # Initialize manager
-    prompts = PromptsManager()
-    
-    # Example 1: Get pseudocode prompt
-    print("=== PSEUDOCODE GENERATION ===")
-    pseudocode_template = prompts.get_pseudocode_prompt()
-    formatted = pseudocode_template.format(
-        specification="Sort an array using quicksort",
-        context="Available functions: partition, swap"
-    )
-    print("System prompt length:", len(formatted['system']))
-    print("Human prompt length:", len(formatted['human']))
-    
-    # Example 2: Get domain knowledge
-    print("\n=== DOMAIN KNOWLEDGE ===")
-    collections_patterns = prompts.get_domain_patterns('collections')
-    print(f"Collections domain has {len(collections_patterns)} patterns")
-    for pattern in collections_patterns[:3]:
-        print(f"  - {pattern}")
-    
-    # Example 3: Build function context
-    print("\n=== FUNCTION CONTEXT ===")
-    func_context = prompts.build_function_context(
-        name="quick_sort",
-        description="Sort array using quicksort algorithm",
-        input_params=[
-            {"name": "arr", "data_type": "int*", "description": "Array to sort"},
-            {"name": "size", "data_type": "int", "description": "Array size"}
-        ],
-        output_params=[
-            {"name": "arr", "data_type": "int*", "description": "Sorted array (in-place)"}
-        ],
-        return_values=[
-            {"condition": "success", "value": "0", "description": "Sorting completed"},
-            {"condition": "error", "value": "-1", "description": "Invalid input"}
-        ],
-        preconditions=[
-            "arr != NULL",
-            "size >= 0"
-        ]
-    )
-    print("Function context preview:")
-    print(func_context[:300] + "...")
-    
-    # Example 4: Build edge case context
-    print("\n=== EDGE CASE CONTEXT ===")
-    edge_cases = {
-        "input_edge_cases": ["Empty array", "Single element", "All duplicates"],
-        "output_edge_cases": ["Sorted output", "In-place modification"],
-        "algorithmic_edge_cases": ["Worst-case O(n²)", "Stack overflow"],
-        "mathematical_edge_cases": ["Integer overflow in comparison"],
-        "boundary_conditions": ["Index 0", "Index size-1"],
-        "error_conditions": ["NULL pointer", "Negative size"],
-        "performance_edge_cases": ["Already sorted", "Reverse sorted"],
-        "domain_specific_cases": ["Stable sort not guaranteed"],
-        "coverage_score": 0.85,
-        "completeness_assessment": "Comprehensive edge case coverage"
-    }
-    edge_context = prompts.build_edge_case_context(edge_cases)
-    print("Edge case context preview:")
-    print(edge_context[:300] + "...")
-    
-    # Example 5: Get complete postcondition prompt
-    print("\n=== COMPLETE POSTCONDITION PROMPT ===")
-    postcond_template = prompts.get_postcondition_prompt()
-    
-    domain_context = prompts.build_domain_context('collections')
-    z3_guidance = prompts.build_z3_theory_guidance(
-        recommended_theory="Linear Integer Arithmetic + Arrays",
-        reason="Sorting involves array indices (LIA) and array access (Arrays theory)"
-    )
-    
-    full_context = prompts.build_full_context(
-        function_context=func_context,
-        edge_case_context=edge_context,
-        domain_context=domain_context,
-        z3_guidance=z3_guidance
-    )
-    
-    final_prompt = postcond_template.format(
-        specification="Sort an array using quicksort",
-        function_context=func_context,
-        variable_context="Input: arr, size; Output: arr (modified)",
-        domain_knowledge=domain_context,
-        edge_case_analysis=edge_context
-    )
-    
-    print(f"Final system prompt length: {len(final_prompt['system'])} characters")
-    print(f"Final human prompt length: {len(final_prompt['human'])} characters")
-    print("\nThis comprehensive prompt includes:")
-    print("  ✓ Complete function signature with types")
-    print("  ✓ 8 categories of edge cases")
-    print("  ✓ Domain-specific patterns and examples")
-    print("  ✓ Z3 theory optimization guidance")
-    print("  ✓ Mathematical notation requirements")
-    print("  ✓ Quality scoring criteria")
-    
-    # Example 6: Access examples
-    print("\n=== EXAMPLES ===")
-    available_examples = prompts.get_all_examples()
-    print(f"Available examples: {available_examples}")
-    
-    sorting_example = prompts.get_example('sorting_example')
-    print(f"\nSorting example has {len(sorting_example['postconditions'])} postconditions")
-    print("First postcondition:")
-    print(f"  Formal: {sorting_example['postconditions'][0]['formal']}")
-    print(f"  Theory: {sorting_example['postconditions'][0]['z3_theory']}")
-
-
-# ============================================================================
-# INTEGRATION WITH LANGCHAIN
-# ============================================================================
-
-def integrate_with_langchain():
-    """
-    Show how to integrate PromptsManager with LangChain chains.
-    
-    This demonstrates the connection between prompts.yaml and your
-    LangChain-based chains in core/chains.py.
-    """
-    from langchain.prompts import ChatPromptTemplate
-    from langchain_openai import ChatOpenAI
-    from langchain.chains import LLMChain
-    
-    # Initialize
-    prompts = PromptsManager()
-    llm = ChatOpenAI(model="gpt-4", temperature=0.3)
-    
-    # Example: Create pseudocode generation chain with loaded prompts
-    print("=== LANGCHAIN INTEGRATION ===\n")
-    
-    # Get template from prompts.yaml
-    template = prompts.get_pseudocode_prompt()
-    
-    # Create LangChain prompt
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", template.system),
-        ("human", template.human)
-    ])
-    
-    # Create chain
-    chain = LLMChain(llm=llm, prompt=prompt)
-    
-    print("✓ Created LangChain chain with prompts.yaml template")
-    print(f"  System prompt: {len(template.system)} chars")
-    print(f"  Human prompt: {len(template.human)} chars")
-    print("\nChain is ready to invoke with:")
-    print("  chain.invoke({'specification': '...', 'context': '...'})")
-    
-    # Show how context building integrates
-    print("\n=== CONTEXT BUILDING INTEGRATION ===\n")
-    
-    # Build rich context using prompts manager
-    func_context = prompts.build_function_context(
-        name="binary_search",
-        description="Search for element in sorted array",
-        input_params=[
-            {"name": "arr", "data_type": "int*", "description": "Sorted array"},
-            {"name": "size", "data_type": "int", "description": "Array size"},
-            {"name": "target", "data_type": "int", "description": "Element to find"}
-        ],
-        output_params=[],
-        return_values=[
-            {"condition": "found", "value": "index", "description": "Index where found"},
-            {"condition": "not found", "value": "-1", "description": "Element not in array"}
-        ],
-        preconditions=[
-            "arr != NULL",
-            "size > 0",
-            "arr is sorted in ascending order"
-        ]
-    )
-    
-    edge_context = prompts.build_edge_case_context({
-        "input_edge_cases": ["Empty array", "Single element", "Target not in array"],
-        "output_edge_cases": ["Valid index returned", "Index in bounds"],
-        "algorithmic_edge_cases": ["O(log n) complexity maintained"],
-        "mathematical_edge_cases": ["Integer overflow in midpoint calculation"],
-        "boundary_conditions": ["First element", "Last element", "Middle element"],
-        "error_conditions": ["NULL pointer", "Negative size", "Unsorted array"],
-        "performance_edge_cases": ["Best case: O(1)", "Worst case: O(log n)"],
-        "domain_specific_cases": ["Duplicate elements", "All elements equal"],
-        "coverage_score": 0.9,
-        "completeness_assessment": "Complete coverage of search edge cases"
-    })
-    
-    domain_context = prompts.build_domain_context('algorithms')
-    
-    print("✓ Built comprehensive context with:")
-    print(f"  - Function signature: {len(func_context)} chars")
-    print(f"  - Edge case analysis: {len(edge_context)} chars")
-    print(f"  - Domain knowledge: {len(domain_context)} chars")
-    print("\n✓ This context is 10x richer than original hardcoded prompts")
-    print("✓ All context is maintainable in prompts.yaml")
-    print("✓ No more 500-line prompt building functions!")
-
-
-# ============================================================================
-# COMPARISON: OLD VS NEW APPROACH
-# ============================================================================
-
-def show_comparison():
-    """Show the dramatic improvement over original approach."""
-    
-    print("=" * 80)
-    print("COMPARISON: OLD APPROACH vs NEW APPROACH")
-    print("=" * 80)
-    
-    print("\n📊 OLD APPROACH (Original Code):")
-    print("  ❌ Prompts scattered across 7 files")
-    print("  ❌ 500+ line prompt building functions")
-    print("  ❌ Hardcoded strings in Python code")
-    print("  ❌ Difficult to update and maintain")
-    print("  ❌ No centralized prompt versioning")
-    print("  ❌ Edge cases manually listed in code")
-    print("  ❌ Domain knowledge duplicated")
-    print("  ❌ ~15,000 lines of code")
-    
-    print("\n✅ NEW APPROACH (With prompts.yaml):")
-    print("  ✓ All prompts in one YAML file")
-    print("  ✓ Simple 50-line context building")
-    print("  ✓ Template-based with variable interpolation")
-    print("  ✓ Easy to update and version")
-    print("  ✓ Git-trackable prompt changes")
-    print("  ✓ Comprehensive edge case library")
-    print("  ✓ Reusable domain knowledge")
-    print("  ✓ ~4,000 lines of code (73% reduction)")
-    
-    print("\n💡 CODE REDUCTION EXAMPLES:")
-    
-    prompts = PromptsManager()
-    
-    print("\n  Original: 500+ lines to build context")
-    print("  New:      5 lines")
-    print("\n    # New approach:")
-    print("    prompts = PromptsManager()")
-    print("    func_ctx = prompts.build_function_context(...)")
-    print("    edge_ctx = prompts.build_edge_case_context(...)")
-    print("    domain_ctx = prompts.build_domain_context('collections')")
-    print("    full_ctx = prompts.build_full_context(func_ctx, edge_ctx, domain_ctx)")
-    
-    print("\n  Original: Multiple scattered API calls")
-    print("  New:      Single chain invocation")
-    print("\n    # New approach:")
-    print("    chain = PseudocodeChain()")
-    print("    result = chain.generate(specification)")
-    
-    print("\n  Original: Manual JSON parsing, 200+ lines")
-    print("  New:      Automatic with Pydantic parser")
-    print("\n    # New approach:")
-    print("    parser = PydanticOutputParser(pydantic_object=Postcondition)")
-    print("    # Parsing happens automatically!")
-    
-    print("\n📈 QUALITY IMPROVEMENTS:")
-    print("  ✓ 8 edge case categories (vs 2-3 in original)")
-    print("  ✓ Z3 theory optimization built-in")
-    print("  ✓ Robustness scoring criteria")
-    print("  ✓ Domain-specific examples library")
-    print("  ✓ Mathematical notation standards")
-    print("  ✓ Validation quality checks")
-    
-    print("\n🚀 DEVELOPMENT SPEED:")
-    print("  ✓ Add new domain: Just edit YAML (5 min)")
-    print("  ✓ Update prompt: Edit one place (2 min)")
-    print("  ✓ Add edge case: Append to list (1 min)")
-    print("  ✓ Test changes: Reload YAML (instant)")
-    
-    print("\n💰 COST OPTIMIZATION:")
-    print("  ✓ Cached prompts loaded once")
-    print("  ✓ Efficient token usage")
-    print("  ✓ Reusable components")
-    print("  ✓ No redundant context building")
-    
-    # Show actual numbers
-    all_domains = prompts.get_all_domains()
-    total_patterns = sum(
-        len(prompts.get_domain_patterns(d)) 
-        for d in all_domains
-    )
-    total_edge_cases = sum(
-        len(prompts.get_domain_edge_cases(d))
-        for d in all_domains
-    )
-    
-    print(f"\n📚 KNOWLEDGE BASE SIZE:")
-    print(f"  • {len(all_domains)} domains")
-    print(f"  • {total_patterns} common patterns")
-    print(f"  • {total_edge_cases} domain edge cases")
-    print(f"  • Z3 theory optimization hierarchy")
-    print(f"  • Complete examples library")
-    
-    print("\n" + "=" * 80)
-
-
-# ============================================================================
-# PROMPT DEVELOPMENT WORKFLOW
-# ============================================================================
-
-def development_workflow():
-    """Show how to develop and iterate on prompts."""
-    
-    print("\n" + "=" * 80)
-    print("PROMPT DEVELOPMENT WORKFLOW")
-    print("=" * 80)
-    
-    print("\n🔄 ITERATIVE DEVELOPMENT PROCESS:\n")
-    
-    print("1️⃣  EDIT prompts.yaml")
-    print("   • Update system prompts")
-    print("   • Add new edge cases")
-    print("   • Refine domain knowledge")
-    print("   • Add examples")
-    
-    print("\n2️⃣  TEST with PromptsManager")
-    print("   >>> prompts = PromptsManager()")
-    print("   >>> template = prompts.get_postcondition_prompt()")
-    print("   >>> # Test immediately!")
-    
-    print("\n3️⃣  INTEGRATE with LangChain")
-    print("   >>> chain = PostconditionChain()")
-    print("   >>> result = chain.generate(...)")
-    
-    print("\n4️⃣  EVALUATE results")
-    print("   • Check postcondition quality")
-    print("   • Review edge case coverage")
-    print("   • Validate Z3 code")
-    
-    print("\n5️⃣  REFINE prompts based on feedback")
-    print("   • Go back to step 1")
-    print("   • No code changes needed!")
-    
-    print("\n🎯 VERSION CONTROL:\n")
-    print("  • Track prompt changes in Git")
-    print("  • Compare versions with git diff")
-    print("  • Roll back if needed")
-    print("  • Branch for experiments")
-    
-    print("\n📊 A/B TESTING:\n")
-    print("  # Test different prompt versions")
-    print("  prompts_v1 = PromptsManager('prompts_v1.yaml')")
-    print("  prompts_v2 = PromptsManager('prompts_v2.yaml')")
-    print("  # Compare results!")
-    
-    print("\n🐛 DEBUGGING:\n")
-    print("  • Print formatted prompts")
-    print("  • Verify variable interpolation")
-    print("  • Check context completeness")
-    print("  • Validate template syntax")
-    
-    example_debug = """
-    # Debug example
-    prompts = PromptsManager()
-    template = prompts.get_postcondition_prompt()
-    
-    # Print formatted prompt to see what LLM receives
-    formatted = template.format(
-        specification="sort array",
-        function_context="...",
-        variable_context="...",
-        domain_knowledge="...",
-        edge_case_analysis="..."
-    )
-    
-    print("=== SYSTEM PROMPT ===")
-    print(formatted['system'])
-    print("\\n=== HUMAN PROMPT ===")
-    print(formatted['human'])
-    """
-    
-    print(example_debug)
-
-
-# ============================================================================
-# MAIN DEMONSTRATION
+# SIMPLE TEST
 # ============================================================================
 
 if __name__ == "__main__":
-    print("\n" + "=" * 80)
-    print("COMPREHENSIVE PROMPTS SYSTEM DEMONSTRATION")
-    print("=" * 80)
+    print("Testing PromptsManager...")
     
     try:
-        # Run all demonstrations
-        example_usage()
-        print("\n" + "=" * 80 + "\n")
+        prompts = PromptsManager()
+        print(f"✅ Loaded prompts from: {prompts.prompts_file}")
         
-        integrate_with_langchain()
-        print("\n" + "=" * 80 + "\n")
+        # Test getting a prompt
+        template = prompts.get_pseudocode_prompt()
+        print(f"✅ Got pseudocode prompt: {len(template.system)} chars")
         
-        show_comparison()
+        # Test domains
+        domains = prompts.get_all_domains()
+        print(f"✅ Found {len(domains)} domains: {domains}")
         
-        development_workflow()
+        # Test formatting
+        formatted = template.format(specification="test", context="")
+        print(f"✅ Formatted prompt: {len(formatted['system'])} chars")
         
-        print("\n" + "=" * 80)
-        print("✅ DEMONSTRATION COMPLETE")
-        print("=" * 80)
-        print("\nNext steps:")
-        print("1. Review prompts.yaml structure")
-        print("2. Customize prompts for your use case")
-        print("3. Integrate with your LangChain chains")
-        print("4. Test with real specifications")
-        print("5. Iterate based on results")
+        print("\n✅ All tests passed!")
         
     except FileNotFoundError as e:
-        print(f"\n❌ Error: {e}")
-        print("\nPlease ensure prompts.yaml is in the config/ directory")
-        print("You can create it by copying the comprehensive prompts artifact")
+        print(f"❌ Error: {e}")
+        print("\nMake sure prompts.yaml exists in config/")
     except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
+        print(f"❌ Unexpected error: {e}")
         import traceback
         traceback.print_exc()

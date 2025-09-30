@@ -243,6 +243,68 @@ class PostconditionGenerator:
         }]
 
 
+# ============================================================================
+# CONVENIENCE FUNCTIONS (for backward compatibility with __init__.py)
+# ============================================================================
+
+def generate_postconditions(
+    specification: str,
+    function: Dict[str, Any],
+    edge_cases: Optional[List[str]] = None,
+    strength: str = "standard"
+) -> List[Dict[str, Any]]:
+    """
+    Convenience function for generating postconditions.
+    
+    Args:
+        specification: Natural language specification
+        function: Pseudocode function dictionary
+        edge_cases: Optional list of edge cases
+        strength: "minimal", "standard", or "comprehensive"
+        
+    Returns:
+        List of postcondition dictionaries
+        
+    Example:
+        >>> postconditions = generate_postconditions(
+        ...     "Sort an array",
+        ...     {"name": "bubble_sort", "input_parameters": [...]}
+        ... )
+    """
+    generator = PostconditionGenerator()
+    return generator.generate(specification, function, edge_cases, strength)
+
+
+def generate_postconditions_batch(
+    specifications: List[str],
+    functions: List[Dict[str, Any]]
+) -> List[List[Dict[str, Any]]]:
+    """
+    Batch generate postconditions for multiple functions.
+    
+    Args:
+        specifications: List of specifications
+        functions: List of function dictionaries
+        
+    Returns:
+        List of postcondition lists
+        
+    Example:
+        >>> results = generate_postconditions_batch(
+        ...     ["Sort array", "Search array"],
+        ...     [func1, func2]
+        ... )
+    """
+    generator = PostconditionGenerator()
+    results = []
+    
+    for spec, func in zip(specifications, functions):
+        postconditions = generator.generate(spec, func)
+        results.append(postconditions)
+    
+    return results
+
+
 # Backward compatible API
 def generate_postconditions_api(specification: str,
                                 function_dict: Dict,

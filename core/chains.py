@@ -4,27 +4,30 @@ LangChain chains for postcondition generation system.
 This module replaces scattered OpenAI API calls with reusable, composable chains.
 Each chain handles one specific task with proper error handling, retries, and caching.
 
-Replaces:
-- Direct openai.ChatCompletion.create() calls throughout codebase
-- Manual prompt construction in pseudocode.py, logic_generator.py, etc.
-- Redundant LLM initialization and configuration
+Uses modern LCEL (LangChain Expression Language) pattern: prompt | llm | parser
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain.chains import LLMChain
 from langchain.prompts import (
     ChatPromptTemplate, 
     PromptTemplate,
     HumanMessagePromptTemplate,
     SystemMessagePromptTemplate
 )
-from langchain.output_parsers import PydanticOutputParser, JsonOutputParser
-from langchain.callbacks import StreamingStdOutCallbackHandler
-from langchain.cache import SQLiteCache
+from langchain.output_parsers import PydanticOutputParser
+from langchain_core.output_parsers import StrOutputParser
+from langchain_community.cache import SQLiteCache
 import langchain
 
 from typing import List, Dict, Any, Optional
-from pathlib import Path
+import json
 
 from config.settings import settings
 from core.models import (
@@ -67,14 +70,11 @@ class LLMFactory:
         Args:
             temperature: Override default temperature
             streaming: Enable streaming responses
-            callbacks: Custom callbacks (auto-adds streaming if enabled)
+            callbacks: Custom callbacks
             
         Returns:
             Configured ChatOpenAI instance
         """
-        if streaming and callbacks is None:
-            callbacks = [StreamingStdOutCallbackHandler()]
-        
         return ChatOpenAI(
             model=settings.openai_model,
             temperature=temperature or settings.temperature,
@@ -110,9 +110,11 @@ class PseudocodeChain:
     def __init__(self, streaming: bool = True):
         self.llm = LLMFactory.create_llm(streaming=streaming)
         self.parser = PydanticOutputParser(pydantic_object=PseudocodeResult)
-        self.chain = self._create_chain()
+        self.prompt = self._create_prompt()
+        # Modern LCEL pattern
+        self.chain = self.prompt | self.llm | StrOutputParser()
     
-    def _create_chain(self) -> LLMChain:
+    def _create_prompt(self) -> ChatPromptTemplate:
         """Create the pseudocode generation chain."""
         
         system_template = """You are an expert C programmer who generates structured pseudocode with ZERO ambiguity.
@@ -164,12 +166,7 @@ Generate complete C pseudocode following ALL requirements above."""
             HumanMessagePromptTemplate.from_template(human_template)
         ])
         
-        return LLMChain(
-            llm=self.llm,
-            prompt=prompt,
-            output_parser=self.parser,
-            verbose=settings.verbose
-        )
+        return prompt
     
     def generate(
         self, 
@@ -199,11 +196,21 @@ Available functions from codebase:
 {self._format_codebase_context(codebase_context)}
 """
         
-        return self.chain.invoke({
-            "specification": specification,
-            "context": context,
-            "format_instructions": self.parser.get_format_instructions()
-        })
+        try:
+            result = self.chain.invoke({
+                "specification": specification,
+                "context": context
+            })
+            
+            # Parse the result
+            return self.parser.parse(result)
+        except Exception as e:
+            print(f"Warning: Failed to parse pseudocode result: {e}")
+            return PseudocodeResult(
+                functions=[],
+                structs=[],
+                dependencies=[]
+            )
     
     async def agenerate(
         self,
@@ -215,11 +222,20 @@ Available functions from codebase:
         if codebase_context:
             context = f"Available functions: {codebase_context}"
         
-        return await self.chain.ainvoke({
-            "specification": specification,
-            "context": context,
-            "format_instructions": self.parser.get_format_instructions()
-        })
+        try:
+            result = await self.chain.ainvoke({
+                "specification": specification,
+                "context": context
+            })
+            
+            return self.parser.parse(result)
+        except Exception as e:
+            print(f"Warning: Failed to parse pseudocode result: {e}")
+            return PseudocodeResult(
+                functions=[],
+                structs=[],
+                dependencies=[]
+            )
     
     def _format_codebase_context(self, context: Dict[str, Any]) -> str:
         """Format codebase context for prompt."""
@@ -243,10 +259,11 @@ class PostconditionChain:
     
     def __init__(self, streaming: bool = False):
         self.llm = LLMFactory.create_llm(streaming=streaming)
-        self.parser = JsonOutputParser()
-        self.chain = self._create_chain()
+        self.prompt = self._create_prompt()
+        # Modern LCEL pattern - parse JSON manually
+        self.chain = self.prompt | self.llm | StrOutputParser()
     
-    def _create_chain(self) -> LLMChain:
+    def _create_prompt(self) -> ChatPromptTemplate:
         """Create the postcondition generation chain."""
         
         system_template = """You are an expert in formal verification and postcondition generation.
@@ -325,12 +342,10 @@ Generate comprehensive postconditions as a JSON array."""
             HumanMessagePromptTemplate.from_template(human_template)
         ])
         
-        return LLMChain(
-            llm=self.llm,
-            prompt=prompt,
-            output_parser=self.parser,
-            verbose=settings.verbose
-        )
+        return ChatPromptTemplate.from_messages([
+            SystemMessagePromptTemplate.from_template(system_template),
+            HumanMessagePromptTemplate.from_template(human_template)
+        ])
     
     def generate(
         self,
@@ -405,27 +420,44 @@ Generate comprehensive postconditions as a JSON array."""
         
         return self._parse_postconditions(result)
     
-    def _parse_postconditions(self, result: Any) -> List[EnhancedPostcondition]:
+    def _parse_postconditions(self, result_text: str) -> List[EnhancedPostcondition]:
         """Parse LLM output into EnhancedPostcondition objects."""
         postconditions = []
         
-        # Result is already parsed by JsonOutputParser
-        if isinstance(result, dict) and 'text' in result:
-            result = result['text']
+        try:
+            # Find JSON array in the response
+            start = result_text.find('[')
+            end = result_text.rfind(']') + 1
+            
+            if start == -1 or end == 0:
+                print("Warning: No JSON array found in response")
+                return []
+            
+            json_str = result_text[start:end]
+            data = json.loads(json_str)
+            
+            if not isinstance(data, list):
+                data = [data]
+            
+            for pc_data in data:
+                try:
+                    # Map the response fields to our model
+                    postcondition = EnhancedPostcondition(
+                        formal_text=pc_data.get("formal_text", ""),
+                        natural_language=pc_data.get("natural_language", ""),
+                        confidence_score=float(pc_data.get("confidence_score", 0.5)),
+                        edge_cases=pc_data.get("edge_cases", []),
+                        z3_theory=pc_data.get("z3_theory", "unknown")
+                    )
+                    postconditions.append(postcondition)
+                except Exception as e:
+                    print(f"Warning: Failed to parse individual postcondition: {e}")
+                    continue
         
-        if isinstance(result, str):
-            import json
-            result = json.loads(result)
-        
-        if not isinstance(result, list):
-            result = [result]
-        
-        for pc_data in result:
-            try:
-                postconditions.append(EnhancedPostcondition(**pc_data))
-            except Exception as e:
-                print(f"Warning: Failed to parse postcondition: {e}")
-                continue
+        except json.JSONDecodeError as e:
+            print(f"Warning: Failed to parse JSON from response: {e}")
+        except Exception as e:
+            print(f"Warning: Unexpected error parsing postconditions: {e}")
         
         return postconditions
 
@@ -444,9 +476,11 @@ class Z3TranslationChain:
     
     def __init__(self, streaming: bool = False):
         self.llm = LLMFactory.create_llm(streaming=streaming, temperature=0.1)
-        self.chain = self._create_chain()
+        self.prompt = self._create_prompt()
+        # Modern LCEL pattern
+        self.chain = self.prompt | self.llm | StrOutputParser()
     
-    def _create_chain(self) -> LLMChain:
+    def _create_prompt(self) -> ChatPromptTemplate:
         """Create the Z3 translation chain."""
         
         system_template = """You are an expert in Z3 theorem prover and SMT solving.
@@ -532,11 +566,10 @@ Generate executable Z3 Python code to verify this postcondition."""
             HumanMessagePromptTemplate.from_template(human_template)
         ])
         
-        return LLMChain(
-            llm=self.llm,
-            prompt=prompt,
-            verbose=settings.verbose
-        )
+        return ChatPromptTemplate.from_messages([
+            SystemMessagePromptTemplate.from_template(system_template),
+            HumanMessagePromptTemplate.from_template(human_template)
+        ])
     
     def translate(
         self,
@@ -609,18 +642,15 @@ Generate executable Z3 Python code to verify this postcondition."""
         
         return translation
     
-    def _extract_code(self, result: Any) -> str:
+    def _extract_code(self, result_text: str) -> str:
         """Extract Z3 code from LLM response."""
-        if isinstance(result, dict):
-            code = result.get('text', '')
-        else:
-            code = str(result)
-        
         # Extract code from markdown code blocks if present
-        if '```python' in code:
-            code = code.split('```python')[1].split('```')[0]
-        elif '```' in code:
-            code = code.split('```')[1].split('```')[0]
+        if '```python' in result_text:
+            code = result_text.split('```python')[1].split('```')[0]
+        elif '```' in result_text:
+            code = result_text.split('```')[1].split('```')[0]
+        else:
+            code = result_text
         
         return code.strip()
     
@@ -674,131 +704,6 @@ Generate executable Z3 Python code to verify this postcondition."""
 
 
 # ============================================================================
-# EDGE CASE ANALYSIS CHAIN
-# ============================================================================
-
-class EdgeCaseChain:
-    """
-    Chain for analyzing edge cases in specifications.
-    
-    Replaces: Edge case analysis code scattered throughout logic_generator.py
-    """
-    
-    def __init__(self):
-        self.llm = LLMFactory.create_llm()
-        self.parser = JsonOutputParser()
-        self.chain = self._create_chain()
-    
-    def _create_chain(self) -> LLMChain:
-        """Create the edge case analysis chain."""
-        
-        system_template = """You are an expert at identifying edge cases in software specifications.
-
-Analyze the specification and identify ALL edge cases that must be considered.
-
-EDGE CASE CATEGORIES:
-
-1. **Input Validation**:
-   - Null/undefined inputs
-   - Empty collections
-   - Single element cases
-   - Invalid types or formats
-
-2. **Boundary Conditions**:
-   - Minimum/maximum values
-   - Zero values
-   - Negative values
-   - Integer overflow/underflow
-
-3. **Resource Constraints**:
-   - Memory allocation failures
-   - Stack overflow
-   - File system errors
-   - Network failures
-
-4. **Concurrency**:
-   - Race conditions
-   - Deadlocks
-   - Thread safety
-
-5. **Special Values**:
-   - NaN, Infinity (for floats)
-   - MIN_INT, MAX_INT
-   - Empty strings
-   - Special characters
-
-Return JSON array of edge cases:
-[
-  {{
-    "category": "input_validation",
-    "description": "Null pointer passed as array",
-    "severity": "critical|high|medium|low",
-    "test_case": "Example test case"
-  }}
-]"""
-
-        human_template = """Specification: {specification}
-
-Function: {function_description}
-
-Parameters:
-{parameters}
-
-Identify ALL edge cases."""
-
-        prompt = ChatPromptTemplate.from_messages([
-            SystemMessagePromptTemplate.from_template(system_template),
-            HumanMessagePromptTemplate.from_template(human_template)
-        ])
-        
-        return LLMChain(
-            llm=self.llm,
-            prompt=prompt,
-            output_parser=self.parser,
-            verbose=settings.verbose
-        )
-    
-    def analyze(
-        self,
-        specification: str,
-        function: Function
-    ) -> List[str]:
-        """
-        Analyze edge cases for a function.
-        
-        Args:
-            specification: Original specification
-            function: Function model
-            
-        Returns:
-            List of edge case descriptions
-        """
-        parameters_str = "\n".join([
-            f"- {p.name}: {p.data_type}"
-            for p in function.input_parameters
-        ])
-        
-        result = self.chain.invoke({
-            "specification": specification,
-            "function_description": function.description,
-            "parameters": parameters_str
-        })
-        
-        # Parse result
-        if isinstance(result, dict) and 'text' in result:
-            result = result['text']
-        
-        if isinstance(result, str):
-            import json
-            result = json.loads(result)
-        
-        if not isinstance(result, list):
-            result = [result]
-        
-        return [ec.get('description', str(ec)) for ec in result]
-
-
-# ============================================================================
 # CHAIN FACTORY - Main Entry Point
 # ============================================================================
 
@@ -819,7 +724,6 @@ class ChainFactory:
         self._pseudocode_chain = None
         self._postcondition_chain = None
         self._z3_chain = None
-        self._edge_case_chain = None
     
     @property
     def pseudocode(self) -> PseudocodeChain:
@@ -841,13 +745,6 @@ class ChainFactory:
         if self._z3_chain is None:
             self._z3_chain = Z3TranslationChain()
         return self._z3_chain
-    
-    @property
-    def edge_case(self) -> EdgeCaseChain:
-        """Get or create edge case analysis chain."""
-        if self._edge_case_chain is None:
-            self._edge_case_chain = EdgeCaseChain()
-        return self._edge_case_chain
 
 
 # ============================================================================
@@ -855,59 +752,7 @@ class ChainFactory:
 # ============================================================================
 
 if __name__ == "__main__":
-    # Example 1: Generate pseudocode
     print("=" * 70)
-    print("EXAMPLE 1: Pseudocode Generation")
+    print("CHAINS - EXAMPLE USAGE")
     print("=" * 70)
-    
-    factory = ChainFactory()
-    
-    pseudocode_result = factory.pseudocode.generate(
-        specification="Sort an array using bubble sort algorithm"
-    )
-    
-    print(f"Generated {len(pseudocode_result.functions)} function(s)")
-    if pseudocode_result.functions:
-        func = pseudocode_result.functions[0]
-        print(f"Function: {func.signature}")
-        print(f"Complexity: {func.complexity}")
-    
-    # Example 2: Generate postconditions
-    print("\n" + "=" * 70)
-    print("EXAMPLE 2: Postcondition Generation")
-    print("=" * 70)
-    
-    # Create a sample function
-    test_function = Function(
-        name="bubble_sort",
-        description="Sort array using bubble sort",
-        return_type="void",
-        input_parameters=[
-            FunctionParameter(name="arr", data_type="int[]"),
-            FunctionParameter(name="size", data_type="int")
-        ]
-    )
-    
-    postconditions = factory.postcondition.generate(
-        function=test_function,
-        specification="Sort array in ascending order"
-    )
-    
-    print(f"Generated {len(postconditions)} postcondition(s)")
-    for i, pc in enumerate(postconditions[:2]):  # Show first 2
-        print(f"\n{i+1}. {pc.natural_language}")
-        print(f"   Formal: {pc.formal_text}")
-        print(f"   Confidence: {pc.confidence_score}")
-    
-    # Example 3: Translate to Z3
-    print("\n" + "=" * 70)
-    print("EXAMPLE 3: Z3 Translation")
-    print("=" * 70)
-    
-    if postconditions:
-        translation = factory.z3.translate(postconditions[0])
-        print(f"Translation successful: {translation.translation_success}")
-        print(f"Validation passed: {translation.z3_validation_passed}")
-        if translation.z3_code:
-            print("\nGenerated Z3 code (first 200 chars):")
-            print(translation.z3_code[:200] + "...")
+    print("\nNote: Set OPENAI_API_KEY in .env to test with real API calls")

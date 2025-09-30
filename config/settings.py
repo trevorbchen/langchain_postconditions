@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     langsmith_api_key: Optional[str] = None
     
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=Path(__file__).parent.parent / ".env",  # Look in project root
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore"  # Ignore extra fields in .env

@@ -1,195 +1,459 @@
 """
-Configuration settings loaded from environment variables.
-Place your API key in a .env file in the root directory:
+Pydantic Data Models for Postcondition Generation System
 
-.env file should contain:
-OPENAI_API_KEY=sk-...your-key-here...
+This module defines all data structures used throughout the system.
+Using Pydantic provides:
+- Automatic validation
+- Type safety
+- Easy JSON serialization
+- Clear documentation
 """
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pathlib import Path
-from typing import Optional
-import os
+from typing import List, Optional, Dict, Any, Union
+from enum import Enum
+from datetime import datetime
+from pydantic import field_validator
+from pydantic import BaseModel, Field, field_validator
+
+# ============================================================================
+# ENUMS
+# ============================================================================
+
+class PostconditionStrength(str, Enum):
+    """Strength levels for postconditions."""
+    MINIMAL = "minimal"
+    STANDARD = "standard"
+    COMPREHENSIVE = "comprehensive"
 
 
-class Settings(BaseSettings):
-    """
-    Application settings loaded from environment variables and .env file.
+class PostconditionCategory(str, Enum):
+    """Categories of postconditions."""
+    RETURN_VALUE = "return_value"
+    STATE_CHANGE = "state_change"
+    SIDE_EFFECT = "side_effect"
+    ERROR_CONDITION = "error_condition"
+    MEMORY = "memory"
+    CORRECTNESS = "correctness"
+    CORE_CORRECTNESS = "core_correctness"
+    BOUNDARY_SAFETY = "boundary_safety"
+    ERROR_RESILIENCE = "error_resilience"
+    PERFORMANCE_CONSTRAINTS = "performance_constraints"
+    DOMAIN_COMPLIANCE = "domain_compliance"
+
+
+class ProcessingStatus(str, Enum):
+    """Status of pipeline processing."""
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    SUCCESS = "success"
+    PARTIAL = "partial"
+    FAILED = "failed"
+
+
+# ============================================================================
+# FUNCTION MODELS
+# ============================================================================
+
+class FunctionParameter(BaseModel):
+    """Represents a function parameter."""
+    name: str
+    data_type: str
+    description: str = ""
+    is_pointer: bool = False
+    is_array: bool = False
+    is_const: bool = False
     
-    Example .env file:
-        OPENAI_API_KEY=sk-proj-...
-        OPENAI_MODEL=gpt-4
-        TEMPERATURE=0.3
-    """
+    @field_validator('data_type')
+    @classmethod
+    def validate_data_type(cls, v):
+        """Ensure data type is not empty."""
+        if not v or not v.strip():
+            raise ValueError("data_type cannot be empty")
+        return v.strip()
+
+
+class ReturnValue(BaseModel):
+    """Represents a possible return value."""
+    condition: str
+    value: str
+    description: str
+    name: Optional[str] = "result"
+
+
+class Dependency(BaseModel):
+    """Represents a function dependency."""
+    function: str
+    source: str  # "stdlib", "codebase", "generated"
+    header: Optional[str] = None
+
+
+class Function(BaseModel):
+    """Represents a C function with full specification."""
+    name: str
+    description: str
+    signature: str = ""
     
-    # ============================================================================
-    # OpenAI Configuration
-    # ============================================================================
-    openai_api_key: str  # Required - will fail if not found
-    openai_model: str = "gpt-4"
-    temperature: float = 0.3
-    max_tokens: int = 3000
+    input_parameters: List[FunctionParameter] = []
+    output_parameters: List[FunctionParameter] = []
+    return_values: List[ReturnValue] = []
+    return_type: str = "void"
     
-    # ============================================================================
-    # Database Paths
-    # ============================================================================
-    context_db: Path = Path("context.db")
-    z3_theories_db: Path = Path("z3_theories.db")
-    results_db: Path = Path("results.db")
+    preconditions: List[str] = []
+    edge_cases: List[str] = []
     
-    # ============================================================================
-    # LangChain Settings
-    # ============================================================================
-    chunk_size: int = 1000
-    chunk_overlap: int = 200
-    enable_streaming: bool = True
+    complexity: str = "O(n)"
+    memory_usage: str = "O(1)"
     
-    # ============================================================================
-    # Caching Configuration
-    # ============================================================================
-    enable_cache: bool = True
-    cache_dir: Path = Path(".cache")
-    llm_cache_db: Path = Path(".cache/llm_cache.db")
+    body: str = ""
+    dependencies: List[Dependency] = []
     
-    # ============================================================================
-    # Vector Store Settings
-    # ============================================================================
-    vector_store_dir: Path = Path(".cache/chroma")
-    embedding_model: str = "text-embedding-3-small"
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "name": "bubble_sort",
+                "description": "Sort array using bubble sort algorithm",
+                "signature": "void bubble_sort(int* arr, int size)",
+                "return_type": "void",
+                "complexity": "O(n²)",
+                "memory_usage": "O(1)"
+            }
+        }
+
+
+class Struct(BaseModel):
+    """Represents a C struct."""
+    name: str
+    fields: List[Dict[str, str]]
+    description: str = ""
+
+
+class Enum(BaseModel):
+    """Represents a C enum."""
+    name: str
+    values: List[str]
+    description: str = ""
+
+
+# ============================================================================
+# PSEUDOCODE RESULT
+# ============================================================================
+
+class PseudocodeResult(BaseModel):
+    """Result from pseudocode generation."""
+    functions: List[Function] = []
+    structs: List[Struct] = []
+    enums: List[Enum] = []
+    global_variables: List[Dict[str, Any]] = []
+    includes: List[str] = []
+    dependencies: List[Dependency] = []
+    metadata: Dict[str, Any] = {}
     
-    # ============================================================================
-    # Agent Configuration
-    # ============================================================================
-    max_retries: int = 3
-    request_timeout: int = 60
-    verbose: bool = True
+    @property
+    def function_names(self) -> List[str]:
+        """Get list of function names."""
+        return [f.name for f in self.functions]
     
-    # ============================================================================
-    # Pipeline Settings
-    # ============================================================================
-    max_parallel_tasks: int = 5
-    enable_monitoring: bool = False
-    langsmith_api_key: Optional[str] = None
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "functions": [
+                    {
+                        "name": "sort_array",
+                        "description": "Sorts an array in ascending order"
+                    }
+                ],
+                "structs": [],
+                "includes": ["stdio.h", "stdlib.h"]
+            }
+        }
+
+
+# ============================================================================
+# POSTCONDITION MODELS
+# ============================================================================
+
+class EnhancedPostcondition(BaseModel):
+    """Enhanced postcondition with metadata."""
+    formal_text: str
+    natural_language: str
     
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore"  # Ignore extra fields in .env
-    )
+    strength: PostconditionStrength = PostconditionStrength.STANDARD
+    category: PostconditionCategory = PostconditionCategory.CORRECTNESS
     
-    def __init__(self, **kwargs):
-        """Initialize settings and create necessary directories."""
-        super().__init__(**kwargs)
+    confidence_score: float = Field(default=0.5, ge=0.0, le=1.0)
+    clarity_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    completeness_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    testability_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    
+    edge_cases: List[str] = []
+    z3_theory: Optional[str] = None
+    reasoning: str = ""
+    
+    warnings: List[str] = []
+    
+    @property
+    def overall_quality_score(self) -> float:
+        """Calculate overall quality score."""
+        if self.clarity_score == 0 and self.completeness_score == 0:
+            return self.confidence_score
         
-        # Create cache directories if they don't exist
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.vector_store_dir.mkdir(parents=True, exist_ok=True)
-        self.llm_cache_db.parent.mkdir(parents=True, exist_ok=True)
+        scores = [
+            self.confidence_score,
+            self.clarity_score,
+            self.completeness_score,
+            self.testability_score
+        ]
+        non_zero_scores = [s for s in scores if s > 0]
+        
+        if not non_zero_scores:
+            return 0.0
+        
+        return sum(non_zero_scores) / len(non_zero_scores)
     
-    @property
-    def openai_client_kwargs(self) -> dict:
-        """Returns kwargs for initializing OpenAI client."""
-        return {
-            "api_key": self.openai_api_key,
-            "max_retries": self.max_retries,
-            "timeout": self.request_timeout
-        }
-    
-    @property
-    def llm_kwargs(self) -> dict:
-        """Returns kwargs for LangChain ChatOpenAI initialization."""
-        return {
-            "model": self.openai_model,
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
-            "openai_api_key": self.openai_api_key,
-            "streaming": self.enable_streaming,
-            "max_retries": self.max_retries,
-            "request_timeout": self.request_timeout
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "formal_text": "∀i,j: 0 ≤ i < j < n → arr[i] ≤ arr[j]",
+                "natural_language": "The array is sorted in ascending order",
+                "strength": "standard",
+                "category": "correctness",
+                "confidence_score": 0.95,
+                "z3_theory": "arrays"
+            }
         }
 
 
 # ============================================================================
-# Global Settings Instance
+# Z3 TRANSLATION MODELS
 # ============================================================================
-settings = Settings()
+
+class Z3Translation(BaseModel):
+    """Result of translating a postcondition to Z3."""
+    formal_text: str
+    natural_language: str
+    
+    z3_code: str = ""
+    z3_theory_used: str = "unknown"
+    
+    translation_success: bool = False
+    z3_validation_passed: bool = False
+    z3_validation_status: str = "not_validated"
+    
+    validation_error: Optional[str] = None
+    warnings: List[str] = []
+    
+    execution_time: float = 0.0
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "formal_text": "∀i: arr[i] ≤ arr[i+1]",
+                "natural_language": "Array is sorted",
+                "z3_code": "from z3 import *\n...",
+                "translation_success": True,
+                "z3_validation_passed": True
+            }
+        }
 
 
 # ============================================================================
-# Helper Functions
+# PIPELINE RESULT MODELS
 # ============================================================================
 
-def validate_api_key() -> bool:
+class FunctionResult(BaseModel):
+    """Result for a single function's postcondition generation."""
+    function_name: str
+    function_signature: str = ""
+    function_description: str = ""
+    
+    pseudocode: Optional[Function] = None
+    postconditions: List[EnhancedPostcondition] = []
+    z3_translations: List[Z3Translation] = []
+    
+    postcondition_count: int = 0
+    z3_success_count: int = 0
+    z3_validated_count: int = 0
+    
+    average_quality_score: float = 0.0
+    edge_case_coverage_score: float = 0.0
+    
+    processing_time: float = 0.0
+    errors: List[str] = []
+
+
+class CompleteEnhancedResult(BaseModel):
+    """Complete result from the entire pipeline."""
+    session_id: str
+    specification: str
+    
+    # Status
+    overall_status: ProcessingStatus = ProcessingStatus.NOT_STARTED
+    
+    # Pseudocode stage
+    pseudocode_success: bool = False
+    pseudocode_raw_output: Optional[PseudocodeResult] = None
+    pseudocode_error: Optional[str] = None
+    functions_created: List[str] = []
+    
+    # Postcondition stage
+    function_results: List[FunctionResult] = []
+    
+    # Statistics
+    total_postconditions: int = 0
+    total_z3_translations: int = 0
+    successful_z3_translations: int = 0
+    validated_z3_translations: int = 0
+    
+    # Metadata
+    codebase_path: Optional[str] = None
+    generated_at: datetime = Field(default_factory=datetime.now)
+    total_processing_time: float = 0.0
+    
+    errors: List[str] = []
+    warnings: List[str] = []
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
+# ============================================================================
+# EDGE CASE MODELS
+# ============================================================================
+
+class EdgeCaseAnalysis(BaseModel):
+    """Result of edge case analysis."""
+    input_edge_cases: List[str] = []
+    output_edge_cases: List[str] = []
+    algorithmic_edge_cases: List[str] = []
+    mathematical_edge_cases: List[str] = []
+    boundary_conditions: List[str] = []
+    error_conditions: List[str] = []
+    performance_edge_cases: List[str] = []
+    domain_specific_cases: List[str] = []
+    
+    coverage_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    completeness_assessment: str = ""
+    
+    @property
+    def all_edge_cases(self) -> List[str]:
+        """Get all edge cases combined."""
+        return (
+            self.input_edge_cases +
+            self.output_edge_cases +
+            self.algorithmic_edge_cases +
+            self.mathematical_edge_cases +
+            self.boundary_conditions +
+            self.error_conditions +
+            self.performance_edge_cases +
+            self.domain_specific_cases
+        )
+    
+    @property
+    def total_count(self) -> int:
+        """Total number of edge cases identified."""
+        return len(self.all_edge_cases)
+
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def create_function_parameter(
+    name: str,
+    data_type: str,
+    description: str = ""
+) -> FunctionParameter:
+    """Helper to create a function parameter."""
+    return FunctionParameter(
+        name=name,
+        data_type=data_type,
+        description=description
+    )
+
+
+def create_simple_function(
+    name: str,
+    description: str,
+    params: List[tuple] = None
+) -> Function:
     """
-    Validates that the OpenAI API key is properly set.
+    Helper to create a simple function.
+    
+    Args:
+        name: Function name
+        description: Function description
+        params: List of (name, type, description) tuples
     
     Returns:
-        bool: True if API key is valid format, False otherwise
+        Function object
     """
-    api_key = settings.openai_api_key
+    input_params = []
+    if params:
+        for param in params:
+            if len(param) == 3:
+                input_params.append(
+                    FunctionParameter(
+                        name=param[0],
+                        data_type=param[1],
+                        description=param[2]
+                    )
+                )
     
-    if not api_key:
-        print("❌ ERROR: OPENAI_API_KEY not found in environment!")
-        print("Please create a .env file with: OPENAI_API_KEY=sk-...")
-        return False
-    
-    if not api_key.startswith("sk-"):
-        print("⚠️  WARNING: API key doesn't start with 'sk-'. This might be invalid.")
-        return False
-    
-    print(f"✅ API key loaded: {api_key[:20]}...{api_key[-4:]}")
-    return True
-
-
-def print_settings():
-    """Print current settings (hiding sensitive info)."""
-    print("\n" + "="*70)
-    print("CURRENT SETTINGS")
-    print("="*70)
-    print(f"OpenAI Model:        {settings.openai_model}")
-    print(f"Temperature:         {settings.temperature}")
-    print(f"Max Tokens:          {settings.max_tokens}")
-    print(f"Cache Enabled:       {settings.enable_cache}")
-    print(f"Streaming Enabled:   {settings.enable_streaming}")
-    print(f"Context DB:          {settings.context_db}")
-    print(f"Z3 Theories DB:      {settings.z3_theories_db}")
-    print(f"Vector Store:        {settings.vector_store_dir}")
-    print(f"API Key:             {settings.openai_api_key[:20]}...{settings.openai_api_key[-4:]}")
-    print("="*70 + "\n")
+    return Function(
+        name=name,
+        description=description,
+        input_parameters=input_params
+    )
 
 
 # ============================================================================
-# Validate on import
+# EXAMPLE USAGE
 # ============================================================================
-if __name__ != "__main__":
-    validate_api_key()
 
-
-# ============================================================================
-# Test script
-# ============================================================================
 if __name__ == "__main__":
-    print("Testing settings configuration...")
-    print_settings()
+    # Example: Create a function
+    sort_func = Function(
+        name="bubble_sort",
+        description="Sort array using bubble sort",
+        return_type="void",
+        input_parameters=[
+            FunctionParameter(
+                name="arr",
+                data_type="int*",
+                description="Array to sort",
+                is_pointer=True
+            ),
+            FunctionParameter(
+                name="size",
+                data_type="int",
+                description="Size of array"
+            )
+        ],
+        complexity="O(n²)",
+        memory_usage="O(1)"
+    )
     
-    if validate_api_key():
-        print("\n✅ All settings loaded successfully!")
-        
-        # Test OpenAI connection
-        print("\nTesting OpenAI connection...")
-        try:
-            from langchain_openai import ChatOpenAI
-            
-            llm = ChatOpenAI(**settings.llm_kwargs)
-            response = llm.invoke("Say 'Settings working!'")
-            print(f"✅ OpenAI Response: {response.content}")
-            
-        except Exception as e:
-            print(f"❌ OpenAI connection failed: {e}")
-    else:
-        print("\n❌ Settings validation failed!")
-        print("\nTo fix:")
-        print("1. Create a .env file in your project root")
-        print("2. Add: OPENAI_API_KEY=sk-your-actual-key-here")
-        print("3. Run this script again")
+    print("Function created:", sort_func.name)
+    print("JSON output:")
+    print(sort_func.model_dump_json(indent=2))
+    
+    # Example: Create a postcondition
+    postcondition = EnhancedPostcondition(
+        formal_text="∀i,j: 0 ≤ i < j < size → arr[i] ≤ arr[j]",
+        natural_language="Array is sorted in ascending order",
+        strength=PostconditionStrength.STANDARD,
+        category=PostconditionCategory.CORRECTNESS,
+        confidence_score=0.95,
+        clarity_score=0.9,
+        completeness_score=0.85,
+        testability_score=0.9,
+        edge_cases=["Empty array", "Single element", "Already sorted"],
+        z3_theory="arrays"
+    )
+    
+    print("\nPostcondition created")
+    print(f"Quality score: {postcondition.overall_quality_score:.2f}")
+    print("JSON output:")
+    print(postcondition.model_dump_json(indent=2))
