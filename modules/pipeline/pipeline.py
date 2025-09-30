@@ -20,6 +20,13 @@ from pathlib import Path
 from datetime import datetime
 import asyncio
 import uuid
+import sys
+import os
+from pathlib import Path
+
+# Get the project root directory (3 levels up from this file)
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
 
 # Note: These imports will work once you've created the module files
 # from modules.pseudocode.generator import PseudocodeGenerator

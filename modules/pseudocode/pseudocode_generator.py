@@ -7,11 +7,17 @@ Reduces code from 800+ lines to ~200 lines
 import openai
 from typing import Dict, List, Optional, Any
 import logging
-import os
 from pathlib import Path
 from dotenv import load_dotenv
 import json
 from datetime import datetime
+import sys
+import os
+from pathlib import Path
+
+# Get the project root directory (3 levels up from this file)
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
 
 from utils.prompt_loader import PromptsManager
 

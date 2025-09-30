@@ -10,6 +10,12 @@ import logging
 import os
 from dotenv import load_dotenv
 import ast
+import sys
+from pathlib import Path
+
+# Get the project root directory (3 levels up from this file)
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
 
 from utils.prompt_loader import PromptsManager
 
