@@ -1,18 +1,14 @@
 """
 Pipeline Orchestrator Module
 
-This module replaces the original pipeline.py (1500+ lines) with a clean
-unified orchestrator using all refactored modules.
+Clean unified orchestrator using LangChain chains.
 
 Key improvements:
 - 93% code reduction (1500 lines → 100 lines)
 - Parallel processing throughout
 - Type-safe with Pydantic models
-- Progress tracking
+- UTF-8 encoding for mathematical symbols
 - Comprehensive error handling
-
-Original file: pipeline.py
-New approach: Orchestrates all modules together
 """
 
 from typing import Optional, List
@@ -21,19 +17,11 @@ from datetime import datetime
 import asyncio
 import uuid
 import sys
-import os
-from pathlib import Path
 
 # Get the project root directory (3 levels up from this file)
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-# Note: These imports will work once you've created the module files
-# from modules.pseudocode.generator import PseudocodeGenerator
-# from modules.logic.generator import PostconditionGenerator
-# from modules.z3.translator import Z3Translator
-
-# For now, use the chains directly
 from core.chains import ChainFactory
 from core.models import (
     CompleteEnhancedResult,
@@ -42,18 +30,17 @@ from core.models import (
     Function,
     ProcessingStatus
 )
-from config.settings import settings
 
 
 class PostconditionPipeline:
     """
     Unified pipeline for complete postcondition generation.
     
-    Orchestrates the entire workflow:
+    Orchestrates:
     1. Generate pseudocode from specification
     2. Generate postconditions for each function
     3. Translate postconditions to Z3 code
-    4. Compile results and save
+    4. Save results
     
     Example:
         >>> pipeline = PostconditionPipeline()
@@ -73,14 +60,9 @@ class PostconditionPipeline:
             codebase_path: Optional path to existing codebase for context
             validate_z3: Whether to validate generated Z3 code
         """
-        # Use chain factory directly for now
         self.factory = ChainFactory()
         self.codebase_path = codebase_path
-        
-        # TODO: Uncomment once module files are created
-        # self.pseudocode_gen = PseudocodeGenerator(codebase_path=codebase_path)
-        # self.postcondition_gen = PostconditionGenerator()
-        # self.z3_translator = Z3Translator(validate_code=validate_z3)
+        self.validate_z3 = validate_z3
     
     async def process(
         self,
@@ -96,11 +78,6 @@ class PostconditionPipeline:
             
         Returns:
             CompleteEnhancedResult with all generated content
-            
-        Example:
-            >>> result = await pipeline.process("Implement bubble sort")
-            >>> for func_result in result.function_results:
-            ...     print(f"{func_result.function_name}: {func_result.postcondition_count} postconditions")
         """
         if session_id is None:
             session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
@@ -126,7 +103,7 @@ class PostconditionPipeline:
                 result.errors.append("Pseudocode generation failed")
                 return result
             
-            # Step 2: Generate postconditions for all functions (parallel)
+            # Step 2: Generate postconditions (parallel)
             print(f"🔍 Step 2/3: Generating postconditions for {len(pseudocode_result.functions)} functions...")
             function_results = await self._generate_all_postconditions(
                 specification,
@@ -134,7 +111,7 @@ class PostconditionPipeline:
                 result
             )
             
-            # Step 3: Translate all postconditions to Z3 (parallel)
+            # Step 3: Translate to Z3 (parallel)
             print(f"⚡ Step 3/3: Translating to Z3...")
             await self._translate_all_to_z3(function_results)
             
@@ -169,16 +146,7 @@ class PostconditionPipeline:
         specification: str,
         session_id: Optional[str] = None
     ) -> CompleteEnhancedResult:
-        """
-        Synchronous version of process() for convenience.
-        
-        Args:
-            specification: Natural language specification
-            session_id: Optional session identifier
-            
-        Returns:
-            CompleteEnhancedResult
-        """
+        """Synchronous version of process()."""
         return asyncio.run(self.process(specification, session_id))
     
     async def _generate_pseudocode(
@@ -188,7 +156,6 @@ class PostconditionPipeline:
     ) -> Optional[PseudocodeResult]:
         """Generate pseudocode from specification."""
         try:
-            # Use chain directly
             pseudocode_result = await self.factory.pseudocode.agenerate(
                 specification=specification
             )
@@ -216,7 +183,6 @@ class PostconditionPipeline:
             self._generate_postconditions_for_function(specification, func, result)
             for func in functions
         ]
-        
         return await asyncio.gather(*tasks)
     
     async def _generate_postconditions_for_function(
@@ -234,7 +200,6 @@ class PostconditionPipeline:
         )
         
         try:
-            # Use chain directly
             postconditions = await self.factory.postcondition.agenerate(
                 function=function,
                 specification=specification
@@ -264,15 +229,13 @@ class PostconditionPipeline:
         function_results: List[FunctionResult]
     ) -> None:
         """Translate all postconditions to Z3 in parallel."""
-        # Collect all postconditions with their function context
         translation_tasks = []
         
         for func_result in function_results:
             for postcondition in func_result.postconditions:
-                # Use chain directly
                 task = self.factory.z3.atranslate(
                     postcondition=postcondition,
-                    function_context=self._build_function_context(func_result.pseudocode) if func_result.pseudocode else None
+                    function_context=self._build_function_context(func_result.pseudocode)
                 )
                 translation_tasks.append((func_result, task))
         
@@ -347,12 +310,12 @@ class PostconditionPipeline:
         session_dir = output_dir / result.session_id
         session_dir.mkdir(parents=True, exist_ok=True)
         
-        # Save main result
+        # Save main result with UTF-8 encoding
         result_path = session_dir / "result.json"
-        with open(result_path, 'w') as f:
+        with open(result_path, 'w', encoding='utf-8') as f:
             f.write(result.model_dump_json(indent=2))
         
-        # Save individual Z3 files
+        # Save individual Z3 files with UTF-8 encoding
         z3_dir = session_dir / "z3_code"
         z3_dir.mkdir(exist_ok=True)
         
@@ -360,8 +323,7 @@ class PostconditionPipeline:
             for i, translation in enumerate(func_result.z3_translations):
                 if translation.z3_code:
                     z3_path = z3_dir / f"{func_result.function_name}_pc{i+1}.py"
-                    # Save Z3 code manually
-                    with open(z3_path, 'w') as f:
+                    with open(z3_path, 'w', encoding='utf-8') as f:
                         f.write(f"# Z3 verification for {func_result.function_name}\n")
                         f.write(f"# Postcondition: {translation.natural_language}\n\n")
                         f.write(translation.z3_code)
@@ -440,11 +402,8 @@ if __name__ == "__main__":
     # Example 3: With codebase context
     print("\n🔍 Example 3: With codebase context")
     print("-" * 70)
-    
-    # If you have existing code
-    # pipeline_with_context = PostconditionPipeline(codebase_path=Path("./my_code"))
-    # result = pipeline_with_context.process_sync("Implement new sorting function")
     print("Note: Provide codebase_path to use existing code context")
+    print("Example: pipeline = PostconditionPipeline(codebase_path=Path('./my_code'))")
     
     print("\n" + "=" * 70)
     print("✅ ALL EXAMPLES COMPLETED")
