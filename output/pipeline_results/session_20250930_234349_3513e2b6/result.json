@@ -1,0 +1,190 @@
+{
+  "session_id": "session_20250930_234349_3513e2b6",
+  "specification": "Sort an array in ascending order using bubble sort algorithm",
+  "overall_status": "success",
+  "pseudocode_success": true,
+  "pseudocode_raw_output": {
+    "functions": [
+      {
+        "name": "bubbleSort",
+        "description": "This function sorts an array in ascending order using the bubble sort algorithm.",
+        "signature": "void bubbleSort(int* arr, int size)",
+        "input_parameters": [
+          {
+            "name": "arr",
+            "data_type": "int*",
+            "description": "This is the array to be sorted.",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          },
+          {
+            "name": "size",
+            "data_type": "int",
+            "description": "This is the size of the array.",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          }
+        ],
+        "output_parameters": [],
+        "return_values": [],
+        "return_type": "void",
+        "preconditions": [
+          "arr != NULL",
+          "size > 0"
+        ],
+        "edge_cases": [
+          "Empty array",
+          "NULL pointer",
+          "Array with all elements same"
+        ],
+        "complexity": "O(n^2)",
+        "memory_usage": "O(1)",
+        "body": "For each element in the array, iterate through the array. If the current element is greater than the next element, swap them. Repeat this process until the array is sorted.",
+        "dependencies": []
+      }
+    ],
+    "structs": [],
+    "enums": [],
+    "global_variables": [],
+    "includes": [
+      "stdio.h",
+      "stdlib.h"
+    ],
+    "dependencies": [],
+    "metadata": {}
+  },
+  "pseudocode_error": null,
+  "functions_created": [
+    "bubbleSort"
+  ],
+  "function_results": [
+    {
+      "function_name": "bubbleSort",
+      "function_signature": "void bubbleSort(int* arr, int size)",
+      "function_description": "This function sorts an array in ascending order using the bubble sort algorithm.",
+      "pseudocode": {
+        "name": "bubbleSort",
+        "description": "This function sorts an array in ascending order using the bubble sort algorithm.",
+        "signature": "void bubbleSort(int* arr, int size)",
+        "input_parameters": [
+          {
+            "name": "arr",
+            "data_type": "int*",
+            "description": "This is the array to be sorted.",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          },
+          {
+            "name": "size",
+            "data_type": "int",
+            "description": "This is the size of the array.",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          }
+        ],
+        "output_parameters": [],
+        "return_values": [],
+        "return_type": "void",
+        "preconditions": [
+          "arr != NULL",
+          "size > 0"
+        ],
+        "edge_cases": [
+          "Empty array",
+          "NULL pointer",
+          "Array with all elements same"
+        ],
+        "complexity": "O(n^2)",
+        "memory_usage": "O(1)",
+        "body": "For each element in the array, iterate through the array. If the current element is greater than the next element, swap them. Repeat this process until the array is sorted.",
+        "dependencies": []
+      },
+      "postconditions": [
+        {
+          "formal_text": "∀i,j: 0 ≤ i < j < size → arr[i] ≤ arr[j]",
+          "natural_language": "Array is sorted in ascending order",
+          "strength": "standard",
+          "category": "core_correctness",
+          "precise_translation": "For every pair of indices i and j in the range from 0 to the size of the array, the element at index i is less than or equal to the element at index j.",
+          "reasoning": "This condition ensures that the array is sorted in ascending order, which is the fundamental property of a sorted array. It verifies that the bubble sort algorithm has correctly sorted the array.",
+          "edge_cases": [],
+          "edge_cases_covered": [
+            "Empty array (size=0): trivially true",
+            "Single element: no pairs",
+            "NULL pointer: function should handle",
+            "Array with all elements same: all comparisons true"
+          ],
+          "coverage_gaps": [
+            "Does not specify stability",
+            "Does not handle NULL pointer",
+            "Does not handle negative array size"
+          ],
+          "confidence_score": 0.95,
+          "clarity_score": 0.9,
+          "completeness_score": 0.85,
+          "testability_score": 0.9,
+          "robustness_score": 0.92,
+          "mathematical_quality_score": 0.96,
+          "overall_priority_score": 0.9159999999999999,
+          "mathematical_validity": "Mathematically sound - proper quantification",
+          "organization_rank": 1,
+          "importance_category": "critical_correctness",
+          "selection_reasoning": "Primary property defining sorted",
+          "robustness_assessment": "Highly robust - covers all orderings",
+          "is_primary_in_category": true,
+          "recommended_for_selection": true,
+          "z3_theory": "arrays",
+          "warnings": []
+        }
+      ],
+      "z3_translations": [
+        {
+          "formal_text": "∀i,j: 0 ≤ i < j < size → arr[i] ≤ arr[j]",
+          "natural_language": "Array is sorted in ascending order",
+          "z3_code": "from z3 import *\n\n# Declare variables\ni = Int('i')\nj = Int('j')\narr = Array('arr', IntSort(), IntSort())\nsize = Int('size')\n\n# Define constraints\nconstraint = ForAll([i, j], \n    Implies(And(i >= 0, j > i, j < size),\n        Select(arr, i) <= Select(arr, j)))\n\n# Create solver and verify\ns = Solver()\ns.add(constraint)\ns.add(size > 0)  # Preconditions\n\nresult = s.check()\nprint(f\"Verification result: {result}\")\n\nif result == sat:\n    print(\"✓ Postcondition is satisfiable\")\n    print(\"Model:\", s.model())\nelif result == unsat:\n    print(\"✗ Postcondition is unsatisfiable\")\nelse:\n    print(\"? Unknown\")",
+          "z3_theory_used": "arrays",
+          "translation_success": true,
+          "translation_time": 0.0,
+          "z3_validation_passed": true,
+          "z3_validation_status": "success",
+          "validation_error": null,
+          "z3_ast": null,
+          "tokens": null,
+          "custom_functions": null,
+          "declared_sorts": null,
+          "declared_variables": null,
+          "warnings": [],
+          "execution_time": 0.0,
+          "generated_at": "2025-09-30T23:44:07.574100"
+        }
+      ],
+      "postcondition_count": 1,
+      "z3_success_count": 1,
+      "z3_validated_count": 1,
+      "average_quality_score": 0.908,
+      "average_robustness_score": 0.92,
+      "edge_case_coverage_score": 4.0,
+      "mathematical_validity_rate": 0.0,
+      "processing_time": 0.0,
+      "errors": []
+    }
+  ],
+  "total_postconditions": 1,
+  "total_z3_translations": 1,
+  "successful_z3_translations": 1,
+  "validated_z3_translations": 1,
+  "codebase_path": null,
+  "generated_at": "2025-09-30T23:43:49.815456",
+  "total_processing_time": 17.758644,
+  "errors": [],
+  "warnings": [
+    "Average quality score across all functions: 0.91",
+    "Average robustness score: 0.92",
+    "Average edge cases per postcondition: 4.0",
+    "Mathematical validity rate: 0.0%"
+  ]
+}

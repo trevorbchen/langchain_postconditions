@@ -1,0 +1,21 @@
+Postconditions Summary
+Session: session_20250930_234349_3513e2b6
+Generated: 2025-09-30 23:43:49.815456
+======================================================================
+
+Function: bubbleSort
+======================================================================
+
+Postcondition 1:
+  Formal: ∀i,j: 0 ≤ i < j < size → arr[i] ≤ arr[j]
+  Natural: Array is sorted in ascending order
+  Translation: For every pair of indices i and j in the range from 0 to the size of the array, the element at index i is less than or equal to the element at index j.
+  Reasoning: This condition ensures that the array is sorted in ascending order, which is the fundamental property of a sorted array. It verifies that the bubble sort algorithm has correctly sorted the array.
+  Edge cases: 4
+    - Empty array (size=0): trivially true
+    - Single element: no pairs
+    - NULL pointer: function should handle
+  Quality: 0.91
+  Robustness: 0.92
+
+

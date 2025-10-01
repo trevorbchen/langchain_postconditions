@@ -11,6 +11,19 @@ Key features:
 - Error reporting with helpful messages
 """
 
+# ============================================================================
+# PATH SETUP - Add project root to Python path
+# ============================================================================
+import sys
+from pathlib import Path
+
+# Get the project root directory (parent of utils/)
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+# ============================================================================
+# NOW import project modules
+# ============================================================================
 from typing import Optional, List, Tuple
 import re
 import ast
