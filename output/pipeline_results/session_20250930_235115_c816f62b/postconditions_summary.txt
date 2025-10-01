@@ -1,0 +1,21 @@
+Postconditions Summary
+Session: session_20250930_235115_c816f62b
+Generated: 2025-09-30 23:51:15.791166
+======================================================================
+
+Function: reverseArray
+======================================================================
+
+Postcondition 1:
+  Formal: ∀i: 0 ≤ i < size → arr[i] = arr[size - i - 1]
+  Natural: Array is reversed
+  Translation: For every index i in the range 0 to size, the element at index i after execution is equal to the element at index (size - i - 1) before execution.
+  Reasoning: This ensures that the array is reversed in place, which is the primary functionality of the function. It guarantees that each element at index i swaps places with the element at the corresponding index from the end of the array.
+  Edge cases: 3
+    - Empty array (size=0): trivially true
+    - Single element: no change
+    - NULL pointer: undefined behavior
+  Quality: 0.91
+  Robustness: 0.92
+
+

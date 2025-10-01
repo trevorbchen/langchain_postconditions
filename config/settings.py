@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     # Agent Configuration
     # ============================================================================
     max_retries: int = 3
-    request_timeout: int = 60
+    request_timeout: int = 120
     verbose: bool = True
     
     # ============================================================================
