@@ -1,0 +1,35 @@
+======================================================================
+PSEUDOCODE SUMMARY
+======================================================================
+Session: session_20251001_120018_fb6357d2
+Specification: sort a list of numbers
+Functions: 1
+======================================================================
+
+Function: sort_numbers
+----------------------------------------------------------------------
+Signature: void sort_numbers(int* numbers, int size)
+Description: Sorts a list of numbers in ascending order
+
+Input Parameters:
+  • numbers (int*): Pointer to the array of numbers to be sorted
+  • size (int): Size of the array
+
+Preconditions:
+  • numbers != NULL
+  • size > 0
+
+Edge Cases:
+  • Empty array
+  • NULL pointer
+  • Single element
+  • Array already sorted
+
+Complexity: O(n log n)
+Memory Usage: O(n)
+
+Algorithm:
+Use a sorting algorithm such as quicksort or mergesort to sort the numbers. Iterate through the array, comparing each element to its neighbor. If the current element is greater than the next one, swap them. Continue this process until the array is sorted.
+
+======================================================================
+

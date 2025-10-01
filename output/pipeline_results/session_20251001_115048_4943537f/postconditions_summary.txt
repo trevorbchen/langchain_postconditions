@@ -1,0 +1,43 @@
+Postconditions Summary
+Session: session_20251001_115048_4943537f
+Generated: 2025-10-01 11:50:48.044144
+======================================================================
+
+Function: reverseList
+======================================================================
+
+Postcondition 1:
+  Formal: ∀i: 0 ≤ i < size → list[i] = list[size - i - 1]
+  Natural: Array elements are reversed in order
+  Translation: For every index i from 0 to size-1, the element at position i in the list equals the element at position (size - i - 1) in the list after the function call. This means the first element becomes last, second becomes second-to-last, and so on.
+  Reasoning: This ensures the complete reversal property - every element swaps to its mirror position. It prevents partial reversals or incorrect index calculations that could leave some elements in wrong positions.
+  Edge cases: 5
+    - Empty list (size=0): no elements to reverse, trivially true
+    - Single element (size=1): element stays in same position (i=0, size-i-1=0)
+    - Two elements: properly swaps positions (i=0→1, i=1→0)
+  Quality: 0.92
+  Robustness: 0.91
+
+Postcondition 2:
+  Formal: ∀i: 0 ≤ i < size → list[i] ≠ NULL
+  Natural: No element in the list is NULL
+  Translation: For every index i from 0 to size-1, the element at position i in the list is not NULL. This ensures that all elements in the list are valid integers.
+  Reasoning: This prevents NULL pointer dereference errors which can lead to undefined behavior or crashes.
+  Edge cases: 3
+    - List with NULL elements: ensures NULL elements are not allowed
+    - Empty list (size=0): trivially true as there are no elements
+    - Single element (size=1): ensures single element is not NULL
+  Quality: 0.89
+  Robustness: 0.90
+
+Postcondition 3:
+  Formal: list ≠ NULL
+  Natural: The list pointer is not NULL
+  Translation: The pointer to the list is not NULL. This ensures that the list exists in memory and can be accessed and modified.
+  Reasoning: This prevents NULL pointer dereference errors which can lead to undefined behavior or crashes.
+  Edge cases: 1
+    - NULL pointer for list: ensures list exists in memory
+  Quality: 0.89
+  Robustness: 0.90
+
+

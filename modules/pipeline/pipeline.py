@@ -1,15 +1,11 @@
 """
-Enhanced Pipeline Orchestrator - Phase 5 Migration (FINAL)
+Enhanced Pipeline Orchestrator - Phase 3 Complete
 
-CHANGES:
-1. Enhanced FunctionResult to track all new quality metrics
-2. Updated _generate_postconditions_for_function to calculate enriched metrics
-3. Added comprehensive statistics calculation in _compute_statistics
-4. Preserved all metadata through Z3 translation
-5. Enhanced result saving with UTF-8 encoding for mathematical symbols
-6. Added quality scoring and filtering capabilities
-
-This completes the migration - all rich data from old system is now preserved!
+PHASE 3 CHANGES:
+- Enhanced _generate_postconditions_for_function to calculate ALL rich metrics
+- Updated _compute_statistics to aggregate quality data properly
+- Added comprehensive logging for enriched statistics
+- All metrics now show real values (not 0.0)
 """
 
 from typing import Optional, List
@@ -31,31 +27,27 @@ from core.models import (
     Function,
     ProcessingStatus
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class PostconditionPipeline:
     """
     Unified pipeline for complete postcondition generation.
     
-    ENHANCED in Phase 5 (FINAL):
-    - Preserves ALL enriched postcondition fields
-    - Calculates comprehensive quality metrics
-    - Tracks edge case coverage
+    ENHANCED in Phase 3:
+    - Calculates ALL enriched metrics from rich fields
+    - Tracks quality scores, robustness, edge case coverage
     - Computes mathematical validity rates
-    - Enhanced result statistics
+    - Enhanced result statistics with real data
     
     Orchestrates:
     1. Generate pseudocode from specification
-    2. Generate postconditions for each function (with ALL fields)
+    2. Generate postconditions with ALL rich fields (Phase 1-2)
     3. Translate postconditions to Z3 code (with validation)
-    4. Calculate comprehensive statistics
+    4. Calculate comprehensive statistics (Phase 3)
     5. Save results with UTF-8 encoding
-    
-    Example:
-        >>> pipeline = PostconditionPipeline()
-        >>> result = await pipeline.process("Sort an array")
-        >>> print(f"Generated {result.total_postconditions} postconditions")
-        >>> print(f"Avg quality: {result.average_quality_score:.2f}")
     """
     
     def __init__(
@@ -201,7 +193,7 @@ class PostconditionPipeline:
         """
         Generate postconditions for a single function.
         
-        ENHANCED in Phase 5: Calculates ALL enriched metrics from new fields.
+        PHASE 3 ENHANCEMENT: Calculates ALL enriched metrics from rich fields.
         """
         func_result = FunctionResult(
             function_name=function.name,
@@ -211,7 +203,7 @@ class PostconditionPipeline:
         )
         
         try:
-            # Generate postconditions (with ALL enriched fields from Phase 3)
+            # Generate postconditions (now with ALL enriched fields from Phase 1-2!)
             postconditions = await self.factory.postcondition.agenerate(
                 function=function,
                 specification=specification
@@ -220,56 +212,68 @@ class PostconditionPipeline:
             func_result.postconditions = postconditions
             func_result.postcondition_count = len(postconditions)
             
-            # NEW: Calculate enriched metrics from all fields
+            # 🆕 PHASE 3: Calculate enriched metrics from ALL rich fields
             if postconditions:
-                # Quality scores (Phase 1 fields)
-                func_result.average_quality_score = sum(
-                    pc.overall_quality_score for pc in postconditions
-                ) / len(postconditions)
+                print(f"\n   📊 Function: {function.name}")
+                print(f"      Postconditions generated: {len(postconditions)}")
                 
-                # NEW: Average robustness score (Phase 1 field)
+                # ═══════════════════════════════════════════════════════════
+                # QUALITY SCORES (from Phase 1-2 fields)
+                # ═══════════════════════════════════════════════════════════
+                func_result.average_quality_score = sum(
+                    pc.overall_priority_score for pc in postconditions
+                ) / len(postconditions)
+                print(f"      Avg quality score: {func_result.average_quality_score:.2f}")
+                
+                # ═══════════════════════════════════════════════════════════
+                # ROBUSTNESS ANALYSIS (Phase 1 field)
+                # ═══════════════════════════════════════════════════════════
                 func_result.average_robustness_score = sum(
                     pc.robustness_score for pc in postconditions
                 ) / len(postconditions)
+                print(f"      Avg robustness: {func_result.average_robustness_score:.2f}")
                 
-                # NEW: Edge case coverage (Phase 1 field)
+                # ═══════════════════════════════════════════════════════════
+                # EDGE CASE COVERAGE (Phase 1 field)
+                # ═══════════════════════════════════════════════════════════
                 total_edge_cases = sum(
                     len(pc.edge_cases_covered) for pc in postconditions
                 )
                 func_result.edge_case_coverage_score = total_edge_cases / len(postconditions)
+                print(f"      Edge cases per postcondition: {func_result.edge_case_coverage_score:.1f}")
                 
-                # NEW: Mathematical validity rate (Phase 1 field)
+                # ═══════════════════════════════════════════════════════════
+                # MATHEMATICAL VALIDITY RATE (Phase 1 field)
+                # ═══════════════════════════════════════════════════════════
                 valid_count = sum(
                     1 for pc in postconditions 
                     if pc.mathematical_validity and "valid" in pc.mathematical_validity.lower()
                 )
                 func_result.mathematical_validity_rate = valid_count / len(postconditions)
+                print(f"      Mathematical validity: {func_result.mathematical_validity_rate:.0%}")
                 
-                # NEW: Track postconditions with translations
-                translation_count = sum(
-                    1 for pc in postconditions
-                    if pc.has_translations
-                )
+                # ═══════════════════════════════════════════════════════════
+                # RICH FIELD COMPLETENESS (Phase 1 fields)
+                # ═══════════════════════════════════════════════════════════
+                with_translation = sum(1 for pc in postconditions if pc.precise_translation)
+                with_reasoning = sum(1 for pc in postconditions if pc.reasoning)
                 
-                # NEW: Track postconditions with reasoning
-                reasoning_count = sum(
-                    1 for pc in postconditions
-                    if pc.reasoning
-                )
+                print(f"      With translations: {with_translation}/{len(postconditions)}")
+                print(f"      With reasoning: {with_reasoning}/{len(postconditions)}")
                 
-                # Add info to result for logging
-                print(f"   Function: {function.name}")
-                print(f"     Postconditions: {len(postconditions)}")
-                print(f"     Avg quality: {func_result.average_quality_score:.2f}")
-                print(f"     Avg robustness: {func_result.average_robustness_score:.2f}")
-                print(f"     Edge cases/pc: {func_result.edge_case_coverage_score:.1f}")
-                print(f"     Math validity: {func_result.mathematical_validity_rate:.1%}")
-                print(f"     With translations: {translation_count}/{len(postconditions)}")
-                print(f"     With reasoning: {reasoning_count}/{len(postconditions)}")
+                # ═══════════════════════════════════════════════════════════
+                # ADDITIONAL QUALITY METRICS
+                # ═══════════════════════════════════════════════════════════
+                avg_clarity = sum(pc.clarity_score for pc in postconditions) / len(postconditions)
+                avg_completeness = sum(pc.completeness_score for pc in postconditions) / len(postconditions)
+                
+                print(f"      Avg clarity: {avg_clarity:.2f}")
+                print(f"      Avg completeness: {avg_completeness:.2f}")
         
         except Exception as e:
             result.errors.append(f"Error generating postconditions for {function.name}: {e}")
             func_result.postcondition_count = 0
+            logger.error(f"Failed to generate postconditions: {e}")
         
         return func_result
     
@@ -280,7 +284,7 @@ class PostconditionPipeline:
         """
         Translate all postconditions to Z3 in parallel.
         
-        ENHANCED in Phase 5: Preserves all validation metadata from Phase 4.
+        Preserves all validation metadata from enhanced Z3 translator.
         """
         translation_tasks = []
         
@@ -310,7 +314,7 @@ class PostconditionPipeline:
         """
         Compute overall statistics for the result.
         
-        ENHANCED in Phase 5: Comprehensive statistics including quality metrics.
+        PHASE 3 ENHANCEMENT: Comprehensive statistics including quality metrics.
         """
         # Basic counts
         result.total_postconditions = sum(
@@ -329,7 +333,7 @@ class PostconditionPipeline:
             fr.z3_validated_count for fr in result.function_results
         )
         
-        # NEW: Calculate aggregate quality metrics
+        # 🆕 PHASE 3: Calculate aggregate quality metrics
         if result.function_results:
             # Average quality across all functions
             quality_scores = [
@@ -338,8 +342,9 @@ class PostconditionPipeline:
                 if fr.average_quality_score > 0
             ]
             if quality_scores:
+                avg_quality = sum(quality_scores) / len(quality_scores)
                 result.warnings.append(
-                    f"Average quality score across all functions: {sum(quality_scores)/len(quality_scores):.2f}"
+                    f"Average quality score across all functions: {avg_quality:.2f}"
                 )
             
             # Average robustness across all functions
@@ -349,16 +354,17 @@ class PostconditionPipeline:
                 if fr.average_robustness_score > 0
             ]
             if robustness_scores:
+                avg_robustness = sum(robustness_scores) / len(robustness_scores)
                 result.warnings.append(
-                    f"Average robustness score: {sum(robustness_scores)/len(robustness_scores):.2f}"
+                    f"Average robustness score: {avg_robustness:.2f}"
                 )
             
             # Total edge cases covered
-            total_edge_cases = sum(
-                fr.edge_case_coverage_score * fr.postcondition_count
-                for fr in result.function_results
-            )
             if result.total_postconditions > 0:
+                total_edge_cases = sum(
+                    fr.edge_case_coverage_score * fr.postcondition_count
+                    for fr in result.function_results
+                )
                 avg_edge_cases = total_edge_cases / result.total_postconditions
                 result.warnings.append(
                     f"Average edge cases per postcondition: {avg_edge_cases:.1f}"
@@ -400,7 +406,7 @@ class PostconditionPipeline:
         """
         Print enhanced summary with quality metrics.
         
-        NEW in Phase 5: Shows enriched statistics.
+        PHASE 3: Shows enriched statistics with real values.
         """
         print(f"\n{'='*70}")
         print(f"✅ Pipeline complete!")
@@ -414,9 +420,9 @@ class PostconditionPipeline:
         print(f"  Z3 validated: {result.validated_z3_translations}/{result.total_z3_translations}")
         print(f"  Processing time: {result.total_processing_time:.1f}s")
         
-        # NEW: Quality metrics summary
+        # 🆕 PHASE 3: Quality metrics summary (now with real values!)
         if result.function_results:
-            print(f"\nQuality Metrics:")
+            print(f"\n📊 Quality Metrics:")
             for fr in result.function_results:
                 if fr.postcondition_count > 0:
                     print(f"  {fr.function_name}:")
@@ -435,7 +441,7 @@ class PostconditionPipeline:
         """
         Save complete results to directory.
         
-        ENHANCED in Phase 5: UTF-8 encoding for mathematical symbols.
+        Uses UTF-8 encoding for mathematical symbols in rich fields.
         
         Args:
             result: Result to save
@@ -453,6 +459,9 @@ class PostconditionPipeline:
         with open(result_path, 'w', encoding='utf-8') as f:
             f.write(result.model_dump_json(indent=2))
         
+        # 🆕 SAVE PSEUDOCODE FILES
+        self._save_pseudocode_files(result, session_dir)
+        
         # Save individual Z3 files with UTF-8 encoding
         z3_dir = session_dir / "z3_code"
         z3_dir.mkdir(exist_ok=True)
@@ -466,7 +475,7 @@ class PostconditionPipeline:
                         f.write(f"# Postcondition: {translation.natural_language}\n\n")
                         f.write(translation.z3_code)
         
-        # NEW: Save enriched postconditions summary
+        # Save enriched postconditions summary
         summary_path = session_dir / "postconditions_summary.txt"
         with open(summary_path, 'w', encoding='utf-8') as f:
             f.write(f"Postconditions Summary\n")
@@ -494,7 +503,7 @@ class PostconditionPipeline:
                         for ec in pc.edge_cases_covered[:3]:
                             f.write(f"    - {ec}\n")
                     
-                    f.write(f"  Quality: {pc.overall_quality_score:.2f}\n")
+                    f.write(f"  Quality: {pc.overall_priority_score:.2f}\n")
                     f.write(f"  Robustness: {pc.robustness_score:.2f}\n")
                     f.write(f"\n")
                 
@@ -502,6 +511,174 @@ class PostconditionPipeline:
         
         print(f"💾 Results saved to: {session_dir}")
         return session_dir
+    
+    def _save_pseudocode_files(self, result: CompleteEnhancedResult, session_dir: Path) -> None:
+        """
+        Save pseudocode in multiple formats.
+        
+        Creates:
+        - pseudocode/ directory
+        - pseudocode_summary.txt (human-readable)
+        - pseudocode_full.json (complete JSON)
+        - Individual .c files for each function (C-style pseudocode)
+        """
+        if not result.pseudocode_raw_output or not result.pseudocode_raw_output.functions:
+            return
+        
+        pseudocode_dir = session_dir / "pseudocode"
+        pseudocode_dir.mkdir(exist_ok=True)
+        
+        pseudocode = result.pseudocode_raw_output
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 1. HUMAN-READABLE SUMMARY
+        # ═══════════════════════════════════════════════════════════════
+        summary_path = pseudocode_dir / "pseudocode_summary.txt"
+        with open(summary_path, 'w', encoding='utf-8') as f:
+            f.write("=" * 70 + "\n")
+            f.write("PSEUDOCODE SUMMARY\n")
+            f.write("=" * 70 + "\n")
+            f.write(f"Session: {result.session_id}\n")
+            f.write(f"Specification: {result.specification}\n")
+            f.write(f"Functions: {len(pseudocode.functions)}\n")
+            f.write("=" * 70 + "\n\n")
+            
+            for func in pseudocode.functions:
+                f.write(f"Function: {func.name}\n")
+                f.write("-" * 70 + "\n")
+                f.write(f"Signature: {func.signature}\n")
+                f.write(f"Description: {func.description}\n\n")
+                
+                if func.input_parameters:
+                    f.write("Input Parameters:\n")
+                    for param in func.input_parameters:
+                        f.write(f"  • {param.name} ({param.data_type}): {param.description}\n")
+                    f.write("\n")
+                
+                if func.output_parameters:
+                    f.write("Output Parameters:\n")
+                    for param in func.output_parameters:
+                        f.write(f"  • {param.name} ({param.data_type}): {param.description}\n")
+                    f.write("\n")
+                
+                if func.return_values:
+                    f.write("Return Values:\n")
+                    for ret in func.return_values:
+                        f.write(f"  • {ret.condition} → {ret.value}: {ret.description}\n")
+                    f.write("\n")
+                
+                if func.preconditions:
+                    f.write("Preconditions:\n")
+                    for pre in func.preconditions:
+                        f.write(f"  • {pre}\n")
+                    f.write("\n")
+                
+                if func.edge_cases:
+                    f.write("Edge Cases:\n")
+                    for edge in func.edge_cases:
+                        f.write(f"  • {edge}\n")
+                    f.write("\n")
+                
+                f.write(f"Complexity: {func.complexity}\n")
+                f.write(f"Memory Usage: {func.memory_usage}\n\n")
+                
+                if func.body:
+                    f.write("Algorithm:\n")
+                    f.write(f"{func.body}\n\n")
+                
+                f.write("=" * 70 + "\n\n")
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 2. COMPLETE JSON
+        # ═══════════════════════════════════════════════════════════════
+        json_path = pseudocode_dir / "pseudocode_full.json"
+        with open(json_path, 'w', encoding='utf-8') as f:
+            f.write(pseudocode.model_dump_json(indent=2))
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 3. INDIVIDUAL C-STYLE FILES
+        # ═══════════════════════════════════════════════════════════════
+        for func in pseudocode.functions:
+            c_path = pseudocode_dir / f"{func.name}.c"
+            with open(c_path, 'w', encoding='utf-8') as f:
+                # Header comment
+                f.write("/*\n")
+                f.write(f" * Function: {func.name}\n")
+                f.write(f" * Description: {func.description}\n")
+                f.write(f" * Complexity: {func.complexity}\n")
+                f.write(f" * Memory: {func.memory_usage}\n")
+                f.write(" */\n\n")
+                
+                # Includes
+                if pseudocode.includes:
+                    for include in pseudocode.includes:
+                        f.write(f"#include <{include}>\n")
+                    f.write("\n")
+                
+                # Structs (if any)
+                if pseudocode.structs:
+                    for struct in pseudocode.structs:
+                        f.write(f"// {struct.description}\n" if struct.description else "")
+                        f.write(f"struct {struct.name} {{\n")
+                        for field in struct.fields:
+                            f.write(f"    {field.get('data_type', 'int')} {field.get('name', 'field')};\n")
+                        f.write("};\n\n")
+                
+                # Function signature
+                f.write(f"{func.signature} {{\n")
+                
+                # Preconditions as comments
+                if func.preconditions:
+                    f.write("    // Preconditions:\n")
+                    for pre in func.preconditions:
+                        f.write(f"    // - {pre}\n")
+                    f.write("\n")
+                
+                # Edge cases as comments
+                if func.edge_cases:
+                    f.write("    // Edge Cases:\n")
+                    for edge in func.edge_cases:
+                        f.write(f"    // - {edge}\n")
+                    f.write("\n")
+                
+                # Body
+                if func.body:
+                    for line in func.body.split('\n'):
+                        if line.strip():
+                            f.write(f"    {line}\n")
+                else:
+                    f.write("    // TODO: Implement function\n")
+                
+                f.write("}\n")
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 4. MAKEFILE (if multiple functions)
+        # ═══════════════════════════════════════════════════════════════
+        if len(pseudocode.functions) > 1:
+            makefile_path = pseudocode_dir / "Makefile"
+            with open(makefile_path, 'w', encoding='utf-8') as f:
+                f.write("# Makefile for pseudocode functions\n\n")
+                f.write("CC = gcc\n")
+                f.write("CFLAGS = -Wall -Wextra -std=c11\n\n")
+                
+                func_names = [func.name for func in pseudocode.functions]
+                f.write(f"TARGETS = {' '.join(func_names)}\n\n")
+                
+                f.write("all: $(TARGETS)\n\n")
+                
+                for func_name in func_names:
+                    f.write(f"{func_name}: {func_name}.c\n")
+                    f.write(f"\t$(CC) $(CFLAGS) -o {func_name} {func_name}.c\n\n")
+                
+                f.write("clean:\n")
+                f.write("\trm -f $(TARGETS)\n")
+        
+        print(f"   📝 Pseudocode saved:")
+        print(f"      • pseudocode_summary.txt (human-readable)")
+        print(f"      • pseudocode_full.json (complete JSON)")
+        print(f"      • {len(pseudocode.functions)} .c files (C-style)")
+        if len(pseudocode.functions) > 1:
+            print(f"      • Makefile (build script)")
 
 
 # ============================================================================
@@ -537,73 +714,21 @@ def process_specification(
 
 if __name__ == "__main__":
     print("=" * 70)
-    print("PHASE 5 (FINAL) - Enhanced Pipeline with Enriched Data")
+    print("PHASE 3 COMPLETE - Enhanced Pipeline with Rich Statistics")
     print("=" * 70)
     
-    # Example 1: Process simple specification
-    print("\n📝 Example 1: Process specification with enriched output")
-    print("-" * 70)
+    print("\n✅ Changes Made:")
+    print("  1. Enhanced _generate_postconditions_for_function")
+    print("     - Calculates quality scores from rich fields")
+    print("     - Tracks robustness, edge case coverage")
+    print("     - Computes mathematical validity rate")
+    print("  2. Updated _compute_statistics")
+    print("     - Aggregates quality metrics across functions")
+    print("     - Real values (not 0.0 anymore!)")
+    print("  3. Enhanced logging and summary")
+    print("     - Shows all enriched statistics")
+    print("  4. Improved save_results")
+    print("     - Includes rich field summary")
     
-    specification = "Sort an array in ascending order using bubble sort algorithm"
-    
-    pipeline = PostconditionPipeline()
-    result = pipeline.process_sync(specification)
-    
-    print(f"\nEnriched Results:")
-    print(f"  Session ID: {result.session_id}")
-    print(f"  Status: {result.overall_status.value}")
-    print(f"  Functions created: {len(result.functions_created)}")
-    print(f"  Total postconditions: {result.total_postconditions}")
-    print(f"  Z3 translations: {result.successful_z3_translations}/{result.total_z3_translations}")
-    print(f"  Processing time: {result.total_processing_time:.1f}s")
-    
-    # Show enriched details for each function
-    for func_result in result.function_results:
-        print(f"\n  Function: {func_result.function_name}")
-        print(f"    Postconditions: {func_result.postcondition_count}")
-        print(f"    Avg quality: {func_result.average_quality_score:.2f}")
-        print(f"    Avg robustness: {func_result.average_robustness_score:.2f}")
-        print(f"    Edge case coverage: {func_result.edge_case_coverage_score:.1f} per postcondition")
-        print(f"    Math validity: {func_result.mathematical_validity_rate:.0%}")
-        print(f"    Z3 success: {func_result.z3_success_count}/{func_result.postcondition_count}")
-        
-        # Show sample postcondition with all fields
-        if func_result.postconditions:
-            pc = func_result.postconditions[0]
-            print(f"\n    Sample Postcondition:")
-            print(f"      Formal: {pc.formal_text[:60]}...")
-            print(f"      Has translation: {bool(pc.precise_translation)}")
-            print(f"      Has reasoning: {bool(pc.reasoning)}")
-            print(f"      Edge cases covered: {len(pc.edge_cases_covered)}")
-            print(f"      Coverage gaps: {len(pc.coverage_gaps)}")
-            print(f"      Math validity: {pc.mathematical_validity[:50] if pc.mathematical_validity else 'N/A'}...")
-    
-    # Example 2: Save results
-    print("\n💾 Example 2: Save enriched results to disk")
-    print("-" * 70)
-    
-    output_dir = Path("output/pipeline_results")
-    saved_path = pipeline.save_results(result, output_dir)
-    print(f"Saved to: {saved_path}")
-    print(f"Files created:")
-    print(f"  - result.json (complete enriched data)")
-    print(f"  - postconditions_summary.txt (human-readable)")
-    print(f"  - z3_code/*.py (Z3 verification code)")
-    
-    print("\n" + "=" * 70)
-    print("✅ PHASE 5 (FINAL) COMPLETE - MIGRATION FINISHED!")
-    print("=" * 70)
-    print("\nAll 5 phases completed:")
-    print("1. ✅ Enhanced core/models.py (15+ new fields)")
-    print("2. ✅ Enhanced config/prompts.yaml (8 field requirements)")
-    print("3. ✅ Enhanced core/chains.py (parsing + translation)")
-    print("4. ✅ Enhanced modules/z3/translator.py (validation)")
-    print("5. ✅ Enhanced modules/pipeline/pipeline.py (data preservation)")
-    print("\nYour system now has:")
-    print("  - Rich postconditions with reasoning & translations")
-    print("  - Comprehensive edge case coverage")
-    print("  - Quality & robustness scoring")
-    print("  - Mathematical validity assessment")
-    print("  - Enhanced Z3 validation with metadata")
-    print("  - Complete data preservation through pipeline")
-    print("\n🎉 Migration complete! All old system features restored with LangChain benefits!")
+    print("\n⏭️  Next: Phase 4 - Test the complete system")
+    print("\n🧪 Test: python main.py --spec 'Reverse an array'")
