@@ -1,0 +1,51 @@
+{
+  "functions": [
+    {
+      "name": "reverseArray",
+      "description": "This function reverses an array in place",
+      "signature": "void reverseArray(int* arr, int size)",
+      "input_parameters": [
+        {
+          "name": "arr",
+          "data_type": "int*",
+          "description": "The array to be reversed",
+          "is_pointer": false,
+          "is_array": false,
+          "is_const": false
+        },
+        {
+          "name": "size",
+          "data_type": "int",
+          "description": "The size of the array",
+          "is_pointer": false,
+          "is_array": false,
+          "is_const": false
+        }
+      ],
+      "output_parameters": [],
+      "return_values": [],
+      "return_type": "void",
+      "preconditions": [
+        "arr != NULL",
+        "size > 0"
+      ],
+      "edge_cases": [
+        "Empty array",
+        "NULL pointer",
+        "Single element array"
+      ],
+      "complexity": "O(n)",
+      "memory_usage": "O(1)",
+      "body": "Initialize two pointers, one at the start and one at the end of the array. While the start pointer is less than the end pointer, swap the elements at these positions and increment the start pointer and decrement the end pointer.",
+      "dependencies": []
+    }
+  ],
+  "structs": [],
+  "enums": [],
+  "global_variables": [],
+  "includes": [
+    "stdio.h"
+  ],
+  "dependencies": [],
+  "metadata": {}
+}

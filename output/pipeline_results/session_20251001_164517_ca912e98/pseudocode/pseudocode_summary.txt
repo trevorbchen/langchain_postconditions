@@ -1,0 +1,22 @@
+======================================================================
+PSEUDOCODE SUMMARY
+======================================================================
+Session: session_20251001_164517_ca912e98
+Specification: Reverse an array in place
+Functions: 1
+======================================================================
+
+Function: reverseArray
+----------------------------------------------------------------------
+Signature: void reverseArray(int* arr, int size)
+Description: This function reverses an array in place
+
+Input Parameters:
+  • arr (int*): The array to be reversed
+  • size (int): The size of the array
+
+Complexity: O(n)
+Memory Usage: O(1)
+
+======================================================================
+

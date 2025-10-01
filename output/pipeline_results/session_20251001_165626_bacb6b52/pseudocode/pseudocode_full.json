@@ -1,0 +1,74 @@
+{
+  "functions": [
+    {
+      "name": "first_three_numbers_below_target",
+      "description": "This function returns the first three numbers in an array that are below a given target value",
+      "signature": "int* first_three_numbers_below_target(int* arr, int size, int target)",
+      "input_parameters": [
+        {
+          "name": "arr",
+          "data_type": "int*",
+          "description": "The input array",
+          "is_pointer": false,
+          "is_array": false,
+          "is_const": false
+        },
+        {
+          "name": "size",
+          "data_type": "int",
+          "description": "The size of the input array",
+          "is_pointer": false,
+          "is_array": false,
+          "is_const": false
+        },
+        {
+          "name": "target",
+          "data_type": "int",
+          "description": "The target value to compare array elements against",
+          "is_pointer": false,
+          "is_array": false,
+          "is_const": false
+        }
+      ],
+      "output_parameters": [],
+      "return_values": [
+        {
+          "condition": "success",
+          "value": "pointer to array of first three numbers below target",
+          "description": "ok",
+          "name": "result"
+        },
+        {
+          "condition": "failure",
+          "value": "NULL",
+          "description": "If there are less than three numbers below target in the array",
+          "name": "result"
+        }
+      ],
+      "return_type": "int*",
+      "preconditions": [
+        "arr != NULL",
+        "size > 0"
+      ],
+      "edge_cases": [
+        "Empty array",
+        "NULL pointer",
+        "Single element",
+        "No numbers below target",
+        "Less than three numbers below target"
+      ],
+      "complexity": "O(n)",
+      "memory_usage": "O(1)",
+      "body": "Iterate over the array. For each element, if it is less than the target, add it to the result. Stop when three numbers have been found or the end of the array is reached.",
+      "dependencies": []
+    }
+  ],
+  "structs": [],
+  "enums": [],
+  "global_variables": [],
+  "includes": [
+    "stdio.h"
+  ],
+  "dependencies": [],
+  "metadata": {}
+}

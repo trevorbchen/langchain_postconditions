@@ -1,0 +1,141 @@
+{
+  "session_id": "session_20251001_165243_f338ffea",
+  "specification": "count the number of ones in an array",
+  "overall_status": "success",
+  "pseudocode_success": true,
+  "pseudocode_raw_output": {
+    "functions": [
+      {
+        "name": "countOnes",
+        "description": "Counts the number of ones in an array",
+        "signature": "int countOnes(int* arr, int size)",
+        "input_parameters": [
+          {
+            "name": "arr",
+            "data_type": "int*",
+            "description": "The array to count ones in",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          },
+          {
+            "name": "size",
+            "data_type": "int",
+            "description": "The size of the array",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          }
+        ],
+        "output_parameters": [],
+        "return_values": [
+          {
+            "condition": "success",
+            "value": "count",
+            "description": "The number of ones in the array",
+            "name": "result"
+          }
+        ],
+        "return_type": "int",
+        "preconditions": [
+          "arr != NULL",
+          "size > 0"
+        ],
+        "edge_cases": [
+          "Empty array",
+          "NULL pointer",
+          "Array without ones"
+        ],
+        "complexity": "O(n)",
+        "memory_usage": "O(1)",
+        "body": "Initialize a counter to 0. Iterate over the array. For each element, if it is 1, increment the counter. Return the counter.",
+        "dependencies": []
+      }
+    ],
+    "structs": [],
+    "enums": [],
+    "global_variables": [],
+    "includes": [
+      "stdio.h"
+    ],
+    "dependencies": [],
+    "metadata": {}
+  },
+  "pseudocode_error": null,
+  "functions_created": [
+    "countOnes"
+  ],
+  "function_results": [
+    {
+      "function_name": "countOnes",
+      "function_signature": "int countOnes(int* arr, int size)",
+      "function_description": "Counts the number of ones in an array",
+      "pseudocode": {
+        "name": "countOnes",
+        "description": "Counts the number of ones in an array",
+        "signature": "int countOnes(int* arr, int size)",
+        "input_parameters": [
+          {
+            "name": "arr",
+            "data_type": "int*",
+            "description": "The array to count ones in",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          },
+          {
+            "name": "size",
+            "data_type": "int",
+            "description": "The size of the array",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          }
+        ],
+        "output_parameters": [],
+        "return_values": [
+          {
+            "condition": "success",
+            "value": "count",
+            "description": "The number of ones in the array",
+            "name": "result"
+          }
+        ],
+        "return_type": "int",
+        "preconditions": [
+          "arr != NULL",
+          "size > 0"
+        ],
+        "edge_cases": [
+          "Empty array",
+          "NULL pointer",
+          "Array without ones"
+        ],
+        "complexity": "O(n)",
+        "memory_usage": "O(1)",
+        "body": "Initialize a counter to 0. Iterate over the array. For each element, if it is 1, increment the counter. Return the counter.",
+        "dependencies": []
+      },
+      "postconditions": [],
+      "z3_translations": [],
+      "postcondition_count": 0,
+      "z3_success_count": 0,
+      "z3_validated_count": 0,
+      "average_quality_score": 0.0,
+      "average_robustness_score": 0.0,
+      "edge_case_coverage_score": 0.0,
+      "mathematical_validity_rate": 0.0,
+      "processing_time": 0.0,
+      "errors": []
+    }
+  ],
+  "total_postconditions": 0,
+  "total_z3_translations": 0,
+  "successful_z3_translations": 0,
+  "validated_z3_translations": 0,
+  "codebase_path": null,
+  "generated_at": "2025-10-01T16:52:43.676208",
+  "total_processing_time": 1.271841,
+  "errors": [],
+  "warnings": []
+}

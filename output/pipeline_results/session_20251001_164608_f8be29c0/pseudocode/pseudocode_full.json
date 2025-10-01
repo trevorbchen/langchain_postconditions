@@ -1,0 +1,58 @@
+{
+  "functions": [
+    {
+      "name": "countOnes",
+      "description": "Counts the number of ones in an array",
+      "signature": "int countOnes(int* arr, int size)",
+      "input_parameters": [
+        {
+          "name": "arr",
+          "data_type": "int*",
+          "description": "The array to count ones in",
+          "is_pointer": false,
+          "is_array": false,
+          "is_const": false
+        },
+        {
+          "name": "size",
+          "data_type": "int",
+          "description": "The size of the array",
+          "is_pointer": false,
+          "is_array": false,
+          "is_const": false
+        }
+      ],
+      "output_parameters": [],
+      "return_values": [
+        {
+          "condition": "success",
+          "value": "count",
+          "description": "The number of ones in the array",
+          "name": "result"
+        }
+      ],
+      "return_type": "int",
+      "preconditions": [
+        "arr != NULL",
+        "size > 0"
+      ],
+      "edge_cases": [
+        "Empty array",
+        "NULL pointer",
+        "Array without ones"
+      ],
+      "complexity": "O(n)",
+      "memory_usage": "O(1)",
+      "body": "Initialize a counter to 0. Iterate over the array. For each element, if it is 1, increment the counter. Return the counter.",
+      "dependencies": []
+    }
+  ],
+  "structs": [],
+  "enums": [],
+  "global_variables": [],
+  "includes": [
+    "stdio.h"
+  ],
+  "dependencies": [],
+  "metadata": {}
+}
