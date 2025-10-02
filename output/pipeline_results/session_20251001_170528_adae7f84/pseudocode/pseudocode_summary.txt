@@ -1,0 +1,22 @@
+======================================================================
+PSEUDOCODE SUMMARY
+======================================================================
+Session: session_20251001_170528_adae7f84
+Specification: sort an array
+Functions: 1
+======================================================================
+
+Function: sort_array
+----------------------------------------------------------------------
+Signature: void sort_array(int* arr, int size)
+Description: Sorts an array in ascending order
+
+Input Parameters:
+  • arr (int*): The array to be sorted
+  • size (int): The size of the array
+
+Complexity: O(n log n)
+Memory Usage: O(1)
+
+======================================================================
+

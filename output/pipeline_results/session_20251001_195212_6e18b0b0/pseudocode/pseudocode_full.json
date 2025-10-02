@@ -1,0 +1,51 @@
+{
+  "functions": [
+    {
+      "name": "sort_array_descending",
+      "description": "Sorts an array in descending order",
+      "signature": "void sort_array_descending(int* arr, int size)",
+      "input_parameters": [
+        {
+          "name": "arr",
+          "data_type": "int*",
+          "description": "The array to be sorted",
+          "is_pointer": false,
+          "is_array": false,
+          "is_const": false
+        },
+        {
+          "name": "size",
+          "data_type": "int",
+          "description": "The size of the array",
+          "is_pointer": false,
+          "is_array": false,
+          "is_const": false
+        }
+      ],
+      "output_parameters": [],
+      "return_values": [],
+      "return_type": "void",
+      "preconditions": [
+        "arr != NULL",
+        "size > 0"
+      ],
+      "edge_cases": [
+        "Empty array",
+        "NULL pointer",
+        "Single element"
+      ],
+      "complexity": "O(n^2)",
+      "memory_usage": "O(1)",
+      "body": "For each element in the array, compare it with every other element. If the current element is smaller than the compared element, swap them.",
+      "dependencies": []
+    }
+  ],
+  "structs": [],
+  "enums": [],
+  "global_variables": [],
+  "includes": [
+    "stdio.h"
+  ],
+  "dependencies": [],
+  "metadata": {}
+}
