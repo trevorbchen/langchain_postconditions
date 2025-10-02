@@ -1,0 +1,470 @@
+{
+  "session_id": "3f5bf3a5-5763-4f97-88ca-0446c8b776d9",
+  "specification": "find the number of odd numbers in an array",
+  "pseudocode_result": {
+    "functions": [
+      {
+        "name": "count_odd_numbers",
+        "description": "Counts the number of odd numbers in an array",
+        "signature": "int count_odd_numbers(int* arr, int size)",
+        "input_parameters": [
+          {
+            "name": "arr",
+            "data_type": "int*",
+            "description": "Input array",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          },
+          {
+            "name": "size",
+            "data_type": "int",
+            "description": "Size of the array",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          }
+        ],
+        "output_parameters": [],
+        "return_values": [
+          {
+            "condition": "success",
+            "value": "count",
+            "description": "Number of odd numbers in the array",
+            "name": "result"
+          }
+        ],
+        "return_type": "int",
+        "preconditions": [
+          "arr != NULL",
+          "size > 0"
+        ],
+        "edge_cases": [
+          "Empty array",
+          "NULL pointer",
+          "Single element",
+          "All even numbers"
+        ],
+        "complexity": "O(n)",
+        "memory_usage": "O(1)",
+        "body": "Initialize a counter to 0. Iterate over the array. For each element, check if it is odd (arr[i] % 2 != 0). If it is, increment the counter. Return the counter.",
+        "dependencies": []
+      }
+    ],
+    "structs": [],
+    "enums": [],
+    "global_variables": [],
+    "includes": [
+      "stdio.h"
+    ],
+    "dependencies": [],
+    "metadata": {}
+  },
+  "function_results": [
+    {
+      "function_name": "count_odd_numbers",
+      "function_signature": "int count_odd_numbers(int* arr, int size)",
+      "function_description": "Counts the number of odd numbers in an array",
+      "pseudocode": {
+        "name": "count_odd_numbers",
+        "description": "Counts the number of odd numbers in an array",
+        "signature": "int count_odd_numbers(int* arr, int size)",
+        "input_parameters": [
+          {
+            "name": "arr",
+            "data_type": "int*",
+            "description": "Input array",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          },
+          {
+            "name": "size",
+            "data_type": "int",
+            "description": "Size of the array",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          }
+        ],
+        "output_parameters": [],
+        "return_values": [
+          {
+            "condition": "success",
+            "value": "count",
+            "description": "Number of odd numbers in the array",
+            "name": "result"
+          }
+        ],
+        "return_type": "int",
+        "preconditions": [
+          "arr != NULL",
+          "size > 0"
+        ],
+        "edge_cases": [
+          "Empty array",
+          "NULL pointer",
+          "Single element",
+          "All even numbers"
+        ],
+        "complexity": "O(n)",
+        "memory_usage": "O(1)",
+        "body": "Initialize a counter to 0. Iterate over the array. For each element, check if it is odd (arr[i] % 2 != 0). If it is, increment the counter. Return the counter.",
+        "dependencies": []
+      },
+      "postconditions": [
+        {
+          "formal_text": "∀i: 0 ≤ i < size → (arr[i] mod 2 = 1 → count_odd_numbers(arr, size) ≥ 1)",
+          "natural_language": "If there is an odd number in the array, the function returns a value greater than or equal to 1",
+          "strength": "standard",
+          "category": "correctness",
+          "precise_translation": "For every index i within the array bounds, if the element at index i is odd, then the function count_odd_numbers returns a value greater than or equal to 1",
+          "reasoning": "This ensures that the function correctly identifies the presence of at least one odd number in the array",
+          "edge_cases": [
+            "empty array",
+            "NULL pointer",
+            "single element",
+            "all even numbers"
+          ],
+          "edge_cases_covered": [
+            "Empty array (size=0): returns 0",
+            "NULL pointer: undefined behavior, not covered",
+            "Single element: if odd, returns 1, otherwise returns 0",
+            "All even numbers: returns 0"
+          ],
+          "coverage_gaps": [
+            "Does not handle NULL pointers"
+          ],
+          "confidence_score": 0.95,
+          "robustness_score": 0.9,
+          "clarity_score": 0.95,
+          "completeness_score": 0.9,
+          "testability_score": 0.9,
+          "mathematical_quality_score": 0.95,
+          "overall_priority_score": 0.9249999999999999,
+          "mathematical_validity": "Mathematically sound - proper universal quantification over valid index range",
+          "organization_rank": 0,
+          "importance_category": "critical_correctness",
+          "selection_reasoning": "Primary property defining the correctness of the function",
+          "robustness_assessment": "Robust for non-NULL arrays - covers all valid inputs and edge cases",
+          "is_primary_in_category": false,
+          "recommended_for_selection": true,
+          "z3_theory": "arrays",
+          "z3_translation": {
+            "formal_text": "∀i: 0 ≤ i < size → (arr[i] mod 2 = 1 → count_odd_numbers(arr, size) ≥ 1)",
+            "natural_language": "If there is an odd number in the array, the function returns a value greater than or equal to 1",
+            "z3_code": "from z3 import *\ns = Solver()\narr = Array('arr', IntSort(), IntSort())\nsize = Int('size')\nfor i in range(size):\n    s.add(Implies(arr[i] % 2 == 1, count_odd_numbers(arr, size) >= 1))\nprint(s.check())",
+            "z3_theory_used": "arrays",
+            "translation_success": true,
+            "translation_time": 0.0,
+            "z3_validation_passed": true,
+            "z3_validation_status": "success",
+            "validation_error": null,
+            "error_type": null,
+            "error_line": null,
+            "validation_warnings": [],
+            "solver_created": false,
+            "constraints_added": 0,
+            "variables_declared": 0,
+            "execution_time": 0.0,
+            "z3_ast": null,
+            "tokens": null,
+            "custom_functions": [],
+            "declared_sorts": [],
+            "declared_variables": {},
+            "warnings": [],
+            "generated_at": "2025-10-02T00:18:22.335530"
+          },
+          "warnings": []
+        },
+        {
+          "formal_text": "count_odd_numbers(arr, size) ≤ size",
+          "natural_language": "The function returns a value less than or equal to the size of the array",
+          "strength": "standard",
+          "category": "correctness",
+          "precise_translation": "The function count_odd_numbers returns a value that is less than or equal to the size of the array",
+          "reasoning": "This ensures that the function does not overcount the number of odd numbers",
+          "edge_cases": [
+            "empty array",
+            "NULL pointer",
+            "single element",
+            "all even numbers"
+          ],
+          "edge_cases_covered": [
+            "Empty array (size=0): returns 0",
+            "NULL pointer: undefined behavior, not covered",
+            "Single element: if odd, returns 1, otherwise returns 0",
+            "All even numbers: returns 0"
+          ],
+          "coverage_gaps": [
+            "Does not handle NULL pointers"
+          ],
+          "confidence_score": 0.95,
+          "robustness_score": 0.95,
+          "clarity_score": 0.95,
+          "completeness_score": 0.9,
+          "testability_score": 0.95,
+          "mathematical_quality_score": 0.95,
+          "overall_priority_score": 0.9424999999999999,
+          "mathematical_validity": "Mathematically sound - compares return value to input size",
+          "organization_rank": 1,
+          "importance_category": "essential_boundary",
+          "selection_reasoning": "Checks that the function does not overcount",
+          "robustness_assessment": "Robust for non-NULL arrays - covers all valid inputs and edge cases",
+          "is_primary_in_category": false,
+          "recommended_for_selection": true,
+          "z3_theory": "arithmetic",
+          "z3_translation": {
+            "formal_text": "count_odd_numbers(arr, size) ≤ size",
+            "natural_language": "The function returns a value less than or equal to the size of the array",
+            "z3_code": "from z3 import *\ns = Solver()\narr = Array('arr', IntSort(), IntSort())\nsize = Int('size')\ns.add(count_odd_numbers(arr, size) <= size)\nprint(s.check())",
+            "z3_theory_used": "arithmetic",
+            "translation_success": true,
+            "translation_time": 0.0,
+            "z3_validation_passed": true,
+            "z3_validation_status": "success",
+            "validation_error": null,
+            "error_type": null,
+            "error_line": null,
+            "validation_warnings": [],
+            "solver_created": false,
+            "constraints_added": 0,
+            "variables_declared": 0,
+            "execution_time": 0.0,
+            "z3_ast": null,
+            "tokens": null,
+            "custom_functions": [],
+            "declared_sorts": [],
+            "declared_variables": {},
+            "warnings": [],
+            "generated_at": "2025-10-02T00:18:22.335530"
+          },
+          "warnings": []
+        },
+        {
+          "formal_text": "count_odd_numbers(arr, size) ≥ 0",
+          "natural_language": "The function returns a non-negative value",
+          "strength": "standard",
+          "category": "correctness",
+          "precise_translation": "The function count_odd_numbers returns a value that is greater than or equal to 0",
+          "reasoning": "This ensures that the function does not undercount the number of odd numbers",
+          "edge_cases": [
+            "empty array",
+            "NULL pointer",
+            "single element",
+            "all even numbers"
+          ],
+          "edge_cases_covered": [
+            "Empty array (size=0): returns 0",
+            "NULL pointer: undefined behavior, not covered",
+            "Single element: if odd, returns 1, otherwise returns 0",
+            "All even numbers: returns 0"
+          ],
+          "coverage_gaps": [
+            "Does not handle NULL pointers"
+          ],
+          "confidence_score": 0.95,
+          "robustness_score": 0.95,
+          "clarity_score": 0.95,
+          "completeness_score": 0.9,
+          "testability_score": 0.95,
+          "mathematical_quality_score": 0.95,
+          "overall_priority_score": 0.9424999999999999,
+          "mathematical_validity": "Mathematically sound - checks for non-negative return value",
+          "organization_rank": 2,
+          "importance_category": "essential_boundary",
+          "selection_reasoning": "Checks that the function does not undercount",
+          "robustness_assessment": "Robust for non-NULL arrays - covers all valid inputs and edge cases",
+          "is_primary_in_category": false,
+          "recommended_for_selection": true,
+          "z3_theory": "arithmetic",
+          "z3_translation": {
+            "formal_text": "count_odd_numbers(arr, size) ≥ 0",
+            "natural_language": "The function returns a non-negative value",
+            "z3_code": "from z3 import *\ns = Solver()\narr = Array('arr', IntSort(), IntSort())\nsize = Int('size')\ns.add(count_odd_numbers(arr, size) >= 0)\nprint(s.check())",
+            "z3_theory_used": "arithmetic",
+            "translation_success": true,
+            "translation_time": 0.0,
+            "z3_validation_passed": true,
+            "z3_validation_status": "success",
+            "validation_error": null,
+            "error_type": null,
+            "error_line": null,
+            "validation_warnings": [],
+            "solver_created": false,
+            "constraints_added": 0,
+            "variables_declared": 0,
+            "execution_time": 0.0,
+            "z3_ast": null,
+            "tokens": null,
+            "custom_functions": [],
+            "declared_sorts": [],
+            "declared_variables": {},
+            "warnings": [],
+            "generated_at": "2025-10-02T00:18:22.335530"
+          },
+          "warnings": []
+        },
+        {
+          "formal_text": "∀i,j: 0 ≤ i < j < size ∧ arr[i] mod 2 = 1 ∧ arr[j] mod 2 = 1 → count_odd_numbers(arr, size) ≥ 2",
+          "natural_language": "If there are at least two odd numbers in the array, the function returns a value greater than or equal to 2",
+          "strength": "standard",
+          "category": "correctness",
+          "precise_translation": "For every pair of indices i and j within the array bounds where i comes before j, if both elements at indices i and j are odd, then the function count_odd_numbers returns a value greater than or equal to 2",
+          "reasoning": "This ensures that the function correctly identifies the presence of at least two odd numbers in the array",
+          "edge_cases": [
+            "empty array",
+            "NULL pointer",
+            "single element",
+            "all even numbers"
+          ],
+          "edge_cases_covered": [
+            "Empty array (size=0): returns 0",
+            "NULL pointer: undefined behavior, not covered",
+            "Single element: if odd, returns 1, otherwise returns 0",
+            "All even numbers: returns 0"
+          ],
+          "coverage_gaps": [
+            "Does not handle NULL pointers"
+          ],
+          "confidence_score": 0.95,
+          "robustness_score": 0.9,
+          "clarity_score": 0.95,
+          "completeness_score": 0.9,
+          "testability_score": 0.9,
+          "mathematical_quality_score": 0.95,
+          "overall_priority_score": 0.9249999999999999,
+          "mathematical_validity": "Mathematically sound - proper universal quantification over valid index range",
+          "organization_rank": 3,
+          "importance_category": "critical_correctness",
+          "selection_reasoning": "Ensures the function correctly counts multiple odd numbers",
+          "robustness_assessment": "Robust for non-NULL arrays - covers all valid inputs and edge cases",
+          "is_primary_in_category": false,
+          "recommended_for_selection": true,
+          "z3_theory": "arrays",
+          "z3_translation": {
+            "formal_text": "∀i,j: 0 ≤ i < j < size ∧ arr[i] mod 2 = 1 ∧ arr[j] mod 2 = 1 → count_odd_numbers(arr, size) ≥ 2",
+            "natural_language": "If there are at least two odd numbers in the array, the function returns a value greater than or equal to 2",
+            "z3_code": "from z3 import *\ns = Solver()\narr = Array('arr', IntSort(), IntSort())\nsize = Int('size')\nfor i in range(size):\n    for j in range(i+1, size):\n        s.add(Implies(And(arr[i] % 2 == 1, arr[j] % 2 == 1), count_odd_numbers(arr, size) >= 2))\nprint(s.check())",
+            "z3_theory_used": "arrays",
+            "translation_success": true,
+            "translation_time": 0.0,
+            "z3_validation_passed": true,
+            "z3_validation_status": "success",
+            "validation_error": null,
+            "error_type": null,
+            "error_line": null,
+            "validation_warnings": [],
+            "solver_created": false,
+            "constraints_added": 0,
+            "variables_declared": 0,
+            "execution_time": 0.0,
+            "z3_ast": null,
+            "tokens": null,
+            "custom_functions": [],
+            "declared_sorts": [],
+            "declared_variables": {},
+            "warnings": [],
+            "generated_at": "2025-10-02T00:18:22.337549"
+          },
+          "warnings": []
+        },
+        {
+          "formal_text": "∀i: 0 ≤ i < size → (arr[i] mod 2 = 0 → count_odd_numbers(arr, size) = 0)",
+          "natural_language": "If all numbers in the array are even, the function returns 0",
+          "strength": "standard",
+          "category": "correctness",
+          "precise_translation": "For every index i within the array bounds, if the element at index i is even, then the function count_odd_numbers returns 0",
+          "reasoning": "This ensures that the function correctly identifies the absence of odd numbers in the array",
+          "edge_cases": [
+            "empty array",
+            "NULL pointer",
+            "single element",
+            "all even numbers"
+          ],
+          "edge_cases_covered": [
+            "Empty array (size=0): returns 0",
+            "NULL pointer: undefined behavior, not covered",
+            "Single element: if odd, returns 1, otherwise returns 0",
+            "All even numbers: returns 0"
+          ],
+          "coverage_gaps": [
+            "Does not handle NULL pointers"
+          ],
+          "confidence_score": 0.95,
+          "robustness_score": 0.9,
+          "clarity_score": 0.95,
+          "completeness_score": 0.9,
+          "testability_score": 0.9,
+          "mathematical_quality_score": 0.95,
+          "overall_priority_score": 0.9249999999999999,
+          "mathematical_validity": "Mathematically sound - proper universal quantification over valid index range",
+          "organization_rank": 4,
+          "importance_category": "critical_correctness",
+          "selection_reasoning": "Ensures the function correctly identifies the absence of odd numbers",
+          "robustness_assessment": "Robust for non-NULL arrays - covers all valid inputs and edge cases",
+          "is_primary_in_category": false,
+          "recommended_for_selection": true,
+          "z3_theory": "arrays",
+          "z3_translation": {
+            "formal_text": "∀i: 0 ≤ i < size → (arr[i] mod 2 = 0 → count_odd_numbers(arr, size) = 0)",
+            "natural_language": "If all numbers in the array are even, the function returns 0",
+            "z3_code": "from z3 import *\ns = Solver()\narr = Array('arr', IntSort(), IntSort())\nsize = Int('size')\nfor i in range(size):\n    s.add(Implies(arr[i] % 2 == 0, count_odd_numbers(arr, size) == 0))\nprint(s.check())",
+            "z3_theory_used": "arrays",
+            "translation_success": true,
+            "translation_time": 0.0,
+            "z3_validation_passed": true,
+            "z3_validation_status": "success",
+            "validation_error": null,
+            "error_type": null,
+            "error_line": null,
+            "validation_warnings": [],
+            "solver_created": false,
+            "constraints_added": 0,
+            "variables_declared": 0,
+            "execution_time": 0.0,
+            "z3_ast": null,
+            "tokens": null,
+            "custom_functions": [],
+            "declared_sorts": [],
+            "declared_variables": {},
+            "warnings": [],
+            "generated_at": "2025-10-02T00:18:22.337549"
+          },
+          "warnings": []
+        }
+      ],
+      "postcondition_count": 5,
+      "average_quality_score": 0.931,
+      "average_robustness_score": 0.9199999999999999,
+      "edge_case_coverage_score": 4.0,
+      "mathematical_validity_rate": 0.6,
+      "z3_translations_count": 5,
+      "z3_validations_passed": 5,
+      "z3_validations_failed": 0,
+      "z3_validation_errors": [],
+      "average_solver_creation_rate": 0.0,
+      "average_constraints_per_code": 0.0,
+      "average_variables_per_code": 0.0,
+      "status": "not_started",
+      "error_message": null,
+      "processing_time": 0.0
+    }
+  ],
+  "total_functions": 1,
+  "total_postconditions": 5,
+  "total_z3_translations": 5,
+  "average_quality_score": 0.931,
+  "average_robustness_score": 0.9199999999999999,
+  "average_validation_score": 0.5,
+  "z3_validation_success_rate": 1.0,
+  "solver_creation_rate": 0.0,
+  "status": "success",
+  "errors": [],
+  "warnings": [
+    "✅ All Z3 validations passed!"
+  ],
+  "started_at": "2025-10-02T00:17:09.540160",
+  "completed_at": "2025-10-02T00:18:22.337549",
+  "total_processing_time": 0.0
+}

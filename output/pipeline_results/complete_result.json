@@ -1,142 +1,225 @@
 {
-  "session_id": "264eb44a-e32f-47ac-82ec-601435d69583",
-  "specification": "reverse a list",
+  "session_id": "ec82962d-028b-4c3c-ac29-89b0b9939083",
+  "specification": "Find the shortest path in a weighted graph",
   "pseudocode_result": {
     "functions": [
       {
-        "name": "reverse_list",
-        "description": "Reverses the order of elements in a list",
-        "signature": "void reverse_list(int* list, int size)",
+        "name": "find_shortest_path",
+        "description": "Finds the shortest path in a weighted graph using Dijkstra's algorithm",
+        "signature": "void find_shortest_path(Graph* graph, Node* start, Node* end)",
         "input_parameters": [
           {
-            "name": "list",
-            "data_type": "int*",
-            "description": "Pointer to the list to be reversed",
+            "name": "graph",
+            "data_type": "Graph*",
+            "description": "The graph to search",
             "is_pointer": false,
             "is_array": false,
             "is_const": false
           },
           {
-            "name": "size",
-            "data_type": "int",
-            "description": "Size of the list",
+            "name": "start",
+            "data_type": "Node*",
+            "description": "The starting node",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          },
+          {
+            "name": "end",
+            "data_type": "Node*",
+            "description": "The ending node",
             "is_pointer": false,
             "is_array": false,
             "is_const": false
           }
         ],
         "output_parameters": [],
-        "return_values": [],
+        "return_values": [
+          {
+            "condition": "success",
+            "value": "0",
+            "description": "The shortest path was found",
+            "name": "result"
+          },
+          {
+            "condition": "failure",
+            "value": "-1",
+            "description": "The shortest path was not found",
+            "name": "result"
+          }
+        ],
         "return_type": "void",
         "preconditions": [
-          "list != NULL",
-          "size > 0"
+          "graph != NULL",
+          "start != NULL",
+          "end != NULL"
         ],
         "edge_cases": [
-          "Empty list",
-          "NULL pointer",
-          "Single element list"
+          "Graph with no nodes",
+          "Graph with no edges",
+          "Start node is the same as end node"
         ],
-        "complexity": "O(n)",
-        "memory_usage": "O(1)",
-        "body": "1. Initialize start to 0 and end to size-1\n2. While start is less than end, swap the elements at these positions in the list\n3. Increment start and decrement end\n4. Repeat steps 2-3 until the list is reversed",
+        "complexity": "O(V^2)",
+        "memory_usage": "O(V)",
+        "body": "Initialize a priority queue with the start node. While the queue is not empty, dequeue the node with the smallest distance, update the distances of its adjacent nodes, and enqueue them. Repeat until the end node is dequeued.",
         "dependencies": []
       }
     ],
-    "structs": [],
+    "structs": [
+      {
+        "name": "Node",
+        "fields": [
+          {
+            "name": "id",
+            "data_type": "int",
+            "description": "The unique identifier of the node"
+          },
+          {
+            "name": "distance",
+            "data_type": "int",
+            "description": "The shortest distance from the start node"
+          },
+          {
+            "name": "adjacent_nodes",
+            "data_type": "Node**",
+            "description": "The nodes adjacent to this node"
+          }
+        ],
+        "description": "Represents a node in the graph"
+      },
+      {
+        "name": "Graph",
+        "fields": [
+          {
+            "name": "nodes",
+            "data_type": "Node**",
+            "description": "The nodes in the graph"
+          },
+          {
+            "name": "num_nodes",
+            "data_type": "int",
+            "description": "The number of nodes in the graph"
+          }
+        ],
+        "description": "Represents a weighted graph"
+      }
+    ],
     "enums": [],
     "global_variables": [],
     "includes": [
-      "stdio.h"
+      "stdio.h",
+      "stdlib.h"
     ],
     "dependencies": [],
     "metadata": {}
   },
   "function_results": [
     {
-      "function_name": "reverse_list",
-      "function_signature": "void reverse_list(int* list, int size)",
-      "function_description": "Reverses the order of elements in a list",
+      "function_name": "find_shortest_path",
+      "function_signature": "void find_shortest_path(Graph* graph, Node* start, Node* end)",
+      "function_description": "Finds the shortest path in a weighted graph using Dijkstra's algorithm",
       "pseudocode": {
-        "name": "reverse_list",
-        "description": "Reverses the order of elements in a list",
-        "signature": "void reverse_list(int* list, int size)",
+        "name": "find_shortest_path",
+        "description": "Finds the shortest path in a weighted graph using Dijkstra's algorithm",
+        "signature": "void find_shortest_path(Graph* graph, Node* start, Node* end)",
         "input_parameters": [
           {
-            "name": "list",
-            "data_type": "int*",
-            "description": "Pointer to the list to be reversed",
+            "name": "graph",
+            "data_type": "Graph*",
+            "description": "The graph to search",
             "is_pointer": false,
             "is_array": false,
             "is_const": false
           },
           {
-            "name": "size",
-            "data_type": "int",
-            "description": "Size of the list",
+            "name": "start",
+            "data_type": "Node*",
+            "description": "The starting node",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          },
+          {
+            "name": "end",
+            "data_type": "Node*",
+            "description": "The ending node",
             "is_pointer": false,
             "is_array": false,
             "is_const": false
           }
         ],
         "output_parameters": [],
-        "return_values": [],
+        "return_values": [
+          {
+            "condition": "success",
+            "value": "0",
+            "description": "The shortest path was found",
+            "name": "result"
+          },
+          {
+            "condition": "failure",
+            "value": "-1",
+            "description": "The shortest path was not found",
+            "name": "result"
+          }
+        ],
         "return_type": "void",
         "preconditions": [
-          "list != NULL",
-          "size > 0"
+          "graph != NULL",
+          "start != NULL",
+          "end != NULL"
         ],
         "edge_cases": [
-          "Empty list",
-          "NULL pointer",
-          "Single element list"
+          "Graph with no nodes",
+          "Graph with no edges",
+          "Start node is the same as end node"
         ],
-        "complexity": "O(n)",
-        "memory_usage": "O(1)",
-        "body": "1. Initialize start to 0 and end to size-1\n2. While start is less than end, swap the elements at these positions in the list\n3. Increment start and decrement end\n4. Repeat steps 2-3 until the list is reversed",
+        "complexity": "O(V^2)",
+        "memory_usage": "O(V)",
+        "body": "Initialize a priority queue with the start node. While the queue is not empty, dequeue the node with the smallest distance, update the distances of its adjacent nodes, and enqueue them. Repeat until the end node is dequeued.",
         "dependencies": []
       },
       "postconditions": [
         {
-          "formal_text": "∀i: 0 ≤ i < size → list[i] = old_list[size - i - 1]",
-          "natural_language": "Each element in the list is in reverse order compared to the original list",
+          "formal_text": "∀n ∈ graph.nodes: n.distance ≠ ∞ → ∃path: start → n ∧ path.length = n.distance",
+          "natural_language": "Every node reachable from the start node has a shortest path equal to its distance value",
           "strength": "standard",
           "category": "correctness",
-          "precise_translation": "For every index i within the bounds of the list, the element at position i in the list is equal to the element at position size - i - 1 in the original list",
-          "reasoning": "This ensures the function correctly reverses the order of elements in the list",
+          "precise_translation": "For every node in the graph, if its distance value is not infinity, there exists a path from the start node to this node and the length of this path is equal to the node's distance value",
+          "reasoning": "This ensures that the algorithm correctly calculates the shortest path to each node",
           "edge_cases": [
-            "empty list",
-            "NULL pointer",
-            "single element list"
+            "Graph with no nodes",
+            "Graph with no edges",
+            "Start node is the same as end node"
           ],
           "edge_cases_covered": [
-            "Empty list (size=0): vacuously true",
-            "NULL pointer: not covered, should be checked before function call",
-            "Single element list: list[0] = old_list[0], holds true"
+            "Graph with no nodes: No nodes to check",
+            "Graph with no edges: No paths to check",
+            "Start node is the same as end node: Distance is 0, path is trivial"
           ],
           "coverage_gaps": [
-            "Does not handle NULL pointers"
+            "Does not specify behavior for unreachable nodes"
           ],
           "confidence_score": 0.95,
-          "robustness_score": 0.95,
-          "clarity_score": 0.95,
-          "completeness_score": 0.9,
-          "testability_score": 0.9,
-          "mathematical_quality_score": 0.95,
-          "overall_priority_score": 0.9374999999999999,
-          "mathematical_validity": "Mathematically sound - proper universal quantification over valid index range",
+          "robustness_score": 0.9,
+          "clarity_score": 0.92,
+          "completeness_score": 0.88,
+          "testability_score": 0.85,
+          "mathematical_quality_score": 0.93,
+          "overall_priority_score": 0.9105,
+          "mathematical_validity": "Mathematically sound - proper universal quantification over nodes and existence of shortest path",
           "organization_rank": 0,
           "importance_category": "critical_correctness",
-          "selection_reasoning": "Primary property defining what it means to be reversed",
-          "robustness_assessment": "Highly robust - covers all orderings and edge cases",
+          "selection_reasoning": "Primary property defining the correctness of Dijkstra's algorithm",
+          "robustness_assessment": "Highly robust - covers all reachable nodes and paths",
           "is_primary_in_category": false,
           "recommended_for_selection": true,
-          "z3_theory": "arrays",
+          "z3_theory": "sets",
           "z3_translation": {
-            "formal_text": "∀i: 0 ≤ i < size → list[i] = old_list[size - i - 1]",
-            "natural_language": "Each element in the list is in reverse order compared to the original list",
-            "z3_code": "from z3 import *\n\nlist, old_list = K('list', IntSort(), IntSort()), K('old_list', IntSort(), IntSort())\nsize = Int('size')\ns = Solver()\n\nfor i in range(size):\n    s.add(list[i] == old_list[size - i - 1])\n\nprint(s.check())",
-            "z3_theory_used": "arrays",
+            "formal_text": "∀n ∈ graph.nodes: n.distance ≠ ∞ → ∃path: start → n ∧ path.length = n.distance",
+            "natural_language": "Every node reachable from the start node has a shortest path equal to its distance value",
+            "z3_code": "from z3 import *\n\n# Define the graph, nodes, and distances\ngraph = FiniteDomainSort('graph', len(graph.nodes))\nNode = DeclareSort('Node')\ndistance = Function('distance', Node, RealSort())\n\n# Define the path and its length\nPath = DeclareSort('Path')\nlength = Function('length', Path, RealSort())\n\n# Define the start node\nstart = Const('start', Node)\n\n# Create a solver\ns = Solver()\n\n# Add the postcondition to the solver\ns.add(ForAll([Node], Implies(distance(Node) != inf, Exists([Path], And(start == Node, length(Path) == distance(Node))))))\n\nprint(s.check())",
+            "z3_theory_used": "sets",
             "translation_success": true,
             "translation_time": 0.0,
             "z3_validation_passed": true,
@@ -155,50 +238,50 @@
             "declared_sorts": [],
             "declared_variables": {},
             "warnings": [],
-            "generated_at": "2025-10-01T23:22:36.945720"
+            "generated_at": "2025-10-01T23:45:37.938283"
           },
           "warnings": []
         },
         {
-          "formal_text": "∀i: 0 ≤ i < size → list[i] ≠ NULL",
-          "natural_language": "No element in the list is NULL",
+          "formal_text": "end.distance ≠ ∞",
+          "natural_language": "End node is reachable from the start node",
           "strength": "standard",
           "category": "correctness",
-          "precise_translation": "For every index i within the bounds of the list, the element at position i in the list is not NULL",
-          "reasoning": "This ensures the function does not introduce NULL elements into the list",
+          "precise_translation": "The distance value of the end node is not infinity, indicating that it is reachable from the start node",
+          "reasoning": "This ensures that a path exists from the start node to the end node",
           "edge_cases": [
-            "empty list",
-            "NULL pointer",
-            "single element list"
+            "Graph with no nodes",
+            "Graph with no edges",
+            "Start node is the same as end node"
           ],
           "edge_cases_covered": [
-            "Empty list (size=0): vacuously true",
-            "NULL pointer: not covered, should be checked before function call",
-            "Single element list: list[0] ≠ NULL, holds true"
+            "Graph with no nodes: No end node to check",
+            "Graph with no edges: End node is unreachable unless it's the start node",
+            "Start node is the same as end node: End node is trivially reachable"
           ],
           "coverage_gaps": [
-            "Does not handle NULL pointers"
+            "Does not specify behavior for unreachable end node"
           ],
           "confidence_score": 0.9,
-          "robustness_score": 0.9,
-          "clarity_score": 0.9,
-          "completeness_score": 0.85,
-          "testability_score": 0.85,
-          "mathematical_quality_score": 0.9,
-          "overall_priority_score": 0.8874999999999998,
-          "mathematical_validity": "Mathematically sound - proper universal quantification over valid index range",
+          "robustness_score": 0.85,
+          "clarity_score": 0.88,
+          "completeness_score": 0.82,
+          "testability_score": 0.8,
+          "mathematical_quality_score": 0.85,
+          "overall_priority_score": 0.8574999999999999,
+          "mathematical_validity": "Mathematically sound - proper check for reachability",
           "organization_rank": 1,
-          "importance_category": "error_handling",
-          "selection_reasoning": "Important for ensuring integrity of the list",
-          "robustness_assessment": "Highly robust - covers all orderings and edge cases",
+          "importance_category": "essential_boundary",
+          "selection_reasoning": "Ensures that the end node is reachable, which is a basic requirement for finding a path",
+          "robustness_assessment": "Robust - covers reachability of end node",
           "is_primary_in_category": false,
           "recommended_for_selection": true,
-          "z3_theory": "arrays",
+          "z3_theory": "arithmetic",
           "z3_translation": {
-            "formal_text": "∀i: 0 ≤ i < size → list[i] ≠ NULL",
-            "natural_language": "No element in the list is NULL",
-            "z3_code": "from z3 import *\n\nlist = K('list', IntSort(), IntSort())\nsize = Int('size')\ns = Solver()\n\nfor i in range(size):\n    s.add(list[i] != None)\n\nprint(s.check())",
-            "z3_theory_used": "arrays",
+            "formal_text": "end.distance ≠ ∞",
+            "natural_language": "End node is reachable from the start node",
+            "z3_code": "from z3 import *\n\n# Define the end node and its distance\nend = Const('end', IntSort())\ndistance = Function('distance', IntSort(), RealSort())\n\n# Create a solver\ns = Solver()\n\n# Add the postcondition to the solver\ns.add(distance(end) != inf)\n\nprint(s.check())",
+            "z3_theory_used": "arithmetic",
             "translation_success": true,
             "translation_time": 0.0,
             "z3_validation_passed": true,
@@ -217,18 +300,80 @@
             "declared_sorts": [],
             "declared_variables": {},
             "warnings": [],
-            "generated_at": "2025-10-01T23:22:36.945720"
+            "generated_at": "2025-10-01T23:45:37.938283"
+          },
+          "warnings": []
+        },
+        {
+          "formal_text": "∀n ∈ graph.nodes: n.distance = ∞ → ¬∃path: start → n",
+          "natural_language": "Every node not reachable from the start node has a distance value of infinity",
+          "strength": "standard",
+          "category": "correctness",
+          "precise_translation": "For every node in the graph, if its distance value is infinity, there does not exist a path from the start node to this node",
+          "reasoning": "This ensures that the algorithm correctly identifies nodes that are not reachable",
+          "edge_cases": [
+            "Graph with no nodes",
+            "Graph with no edges",
+            "Start node is the same as end node"
+          ],
+          "edge_cases_covered": [
+            "Graph with no nodes: No nodes to check",
+            "Graph with no edges: All nodes except the start node are unreachable",
+            "Start node is the same as end node: All other nodes are unreachable unless there are self-loops"
+          ],
+          "coverage_gaps": [
+            "Does not specify behavior for nodes reachable via negative cycles"
+          ],
+          "confidence_score": 0.92,
+          "robustness_score": 0.88,
+          "clarity_score": 0.9,
+          "completeness_score": 0.86,
+          "testability_score": 0.83,
+          "mathematical_quality_score": 0.9,
+          "overall_priority_score": 0.8869999999999999,
+          "mathematical_validity": "Mathematically sound - proper universal quantification over nodes and non-existence of path",
+          "organization_rank": 2,
+          "importance_category": "error_handling",
+          "selection_reasoning": "Ensures that the algorithm correctly handles unreachable nodes",
+          "robustness_assessment": "Robust - covers all unreachable nodes",
+          "is_primary_in_category": false,
+          "recommended_for_selection": true,
+          "z3_theory": "sets",
+          "z3_translation": {
+            "formal_text": "∀n ∈ graph.nodes: n.distance = ∞ → ¬∃path: start → n",
+            "natural_language": "Every node not reachable from the start node has a distance value of infinity",
+            "z3_code": "from z3 import *\n\n# Define the graph, nodes, and distances\ngraph = FiniteDomainSort('graph', len(graph.nodes))\nNode = DeclareSort('Node')\ndistance = Function('distance', Node, RealSort())\n\n# Define the start node\nstart = Const('start', Node)\n\n# Create a solver\ns = Solver()\n\n# Add the postcondition to the solver\ns.add(ForAll([Node], Implies(distance(Node) == inf, Not(Exists([Path], start == Node)))))\n\nprint(s.check())",
+            "z3_theory_used": "sets",
+            "translation_success": true,
+            "translation_time": 0.0,
+            "z3_validation_passed": true,
+            "z3_validation_status": "success",
+            "validation_error": null,
+            "error_type": null,
+            "error_line": null,
+            "validation_warnings": [],
+            "solver_created": false,
+            "constraints_added": 0,
+            "variables_declared": 0,
+            "execution_time": 0.0,
+            "z3_ast": null,
+            "tokens": null,
+            "custom_functions": [],
+            "declared_sorts": [],
+            "declared_variables": {},
+            "warnings": [],
+            "generated_at": "2025-10-01T23:45:37.938283"
           },
           "warnings": []
         }
       ],
-      "postcondition_count": 2,
-      "average_quality_score": 0.9075,
-      "average_robustness_score": 0.925,
+      "postcondition_count": 3,
+      "average_quality_score": 0.8831666666666668,
+      "average_robustness_score": 0.8766666666666666,
       "edge_case_coverage_score": 3.0,
-      "mathematical_validity_rate": 1.0,
-      "z3_translations_count": 2,
-      "z3_validations_passed": 2,
+      "mathematical_validity_rate": 0.0,
+      "z3_translations_count": 3,
+      "z3_validations_passed": 3,
       "z3_validations_failed": 0,
       "z3_validation_errors": [],
       "average_solver_creation_rate": 0.0,
@@ -240,10 +385,10 @@
     }
   ],
   "total_functions": 1,
-  "total_postconditions": 2,
-  "total_z3_translations": 2,
-  "average_quality_score": 0.9075,
-  "average_robustness_score": 0.925,
+  "total_postconditions": 3,
+  "total_z3_translations": 3,
+  "average_quality_score": 0.8831666666666668,
+  "average_robustness_score": 0.8766666666666666,
   "average_validation_score": 0.5,
   "z3_validation_success_rate": 1.0,
   "solver_creation_rate": 0.0,
@@ -252,7 +397,7 @@
   "warnings": [
     "✅ All Z3 validations passed!"
   ],
-  "started_at": "2025-10-01T23:22:35.680974",
-  "completed_at": "2025-10-01T23:22:36.949307",
+  "started_at": "2025-10-01T23:45:36.598029",
+  "completed_at": "2025-10-01T23:45:37.938283",
   "total_processing_time": 0.0
 }

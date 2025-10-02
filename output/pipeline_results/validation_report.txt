@@ -2,27 +2,27 @@
 Z3 VALIDATION REPORT
 ================================================================================
 
-Session ID: 264eb44a-e32f-47ac-82ec-601435d69583
-Generated: 2025-10-01T23:22:35.680974
+Session ID: ec82962d-028b-4c3c-ac29-89b0b9939083
+Generated: 2025-10-01T23:45:36.598029
 
 📊 OVERVIEW
 --------------------------------------------------------------------------------
 Total Functions:        1
-Total Postconditions:   2
-Total Z3 Translations:  2
+Total Postconditions:   3
+Total Z3 Translations:  3
 
 ✅ VALIDATION RESULTS
 --------------------------------------------------------------------------------
 Success Rate:           100.0%
 Solver Creation Rate:   0.0%
-Average Quality:        0.91
+Average Quality:        0.88
 Average Validation:     0.50
 
 
-Function: reverse_list
-  Postconditions:       2
-  Z3 Translations:      2
-  Validations Passed:   2/2
+Function: find_shortest_path
+  Postconditions:       3
+  Z3 Translations:      3
+  Validations Passed:   3/3
 
 
 ⚠️  WARNINGS

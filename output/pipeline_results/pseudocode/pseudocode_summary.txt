@@ -2,7 +2,7 @@
 PSEUDOCODE SUMMARY
 ======================================================================
 
-Function: reverse_list
-Signature: void reverse_list(int* list, int size)
-Description: Reverses the order of elements in a list
+Function: find_shortest_path
+Signature: void find_shortest_path(Graph* graph, Node* start, Node* end)
+Description: Finds the shortest path in a weighted graph using Dijkstra's algorithm
 

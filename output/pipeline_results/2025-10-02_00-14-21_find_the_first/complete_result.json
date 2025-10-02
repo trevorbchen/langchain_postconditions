@@ -1,0 +1,300 @@
+{
+  "session_id": "a73e047d-c0fa-4941-8f39-da3304adbe34",
+  "specification": "find the first index in an array thats not a",
+  "pseudocode_result": {
+    "functions": [
+      {
+        "name": "find_first_not_a",
+        "description": "Finds the first index in an array that is not equal to a specified value",
+        "signature": "int find_first_not_a(int* arr, int size, int a)",
+        "input_parameters": [
+          {
+            "name": "arr",
+            "data_type": "int*",
+            "description": "Array to be searched",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          },
+          {
+            "name": "size",
+            "data_type": "int",
+            "description": "Size of the array",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          },
+          {
+            "name": "a",
+            "data_type": "int",
+            "description": "Value to be compared",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          }
+        ],
+        "output_parameters": [],
+        "return_values": [
+          {
+            "condition": "success",
+            "value": "index",
+            "description": "Index of the first element that is not equal to a",
+            "name": "result"
+          },
+          {
+            "condition": "failure",
+            "value": "-1",
+            "description": "All elements in the array are equal to a",
+            "name": "result"
+          }
+        ],
+        "return_type": "int",
+        "preconditions": [
+          "arr != NULL",
+          "size > 0"
+        ],
+        "edge_cases": [
+          "Empty array",
+          "NULL pointer",
+          "Array with all elements equal to a"
+        ],
+        "complexity": "O(n)",
+        "memory_usage": "O(1)",
+        "body": "Iterate over the array from the beginning. If the current element is not equal to a, return its index. If no such element is found, return -1.",
+        "dependencies": []
+      }
+    ],
+    "structs": [],
+    "enums": [],
+    "global_variables": [],
+    "includes": [
+      "stdio.h"
+    ],
+    "dependencies": [],
+    "metadata": {}
+  },
+  "function_results": [
+    {
+      "function_name": "find_first_not_a",
+      "function_signature": "int find_first_not_a(int* arr, int size, int a)",
+      "function_description": "Finds the first index in an array that is not equal to a specified value",
+      "pseudocode": {
+        "name": "find_first_not_a",
+        "description": "Finds the first index in an array that is not equal to a specified value",
+        "signature": "int find_first_not_a(int* arr, int size, int a)",
+        "input_parameters": [
+          {
+            "name": "arr",
+            "data_type": "int*",
+            "description": "Array to be searched",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          },
+          {
+            "name": "size",
+            "data_type": "int",
+            "description": "Size of the array",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          },
+          {
+            "name": "a",
+            "data_type": "int",
+            "description": "Value to be compared",
+            "is_pointer": false,
+            "is_array": false,
+            "is_const": false
+          }
+        ],
+        "output_parameters": [],
+        "return_values": [
+          {
+            "condition": "success",
+            "value": "index",
+            "description": "Index of the first element that is not equal to a",
+            "name": "result"
+          },
+          {
+            "condition": "failure",
+            "value": "-1",
+            "description": "All elements in the array are equal to a",
+            "name": "result"
+          }
+        ],
+        "return_type": "int",
+        "preconditions": [
+          "arr != NULL",
+          "size > 0"
+        ],
+        "edge_cases": [
+          "Empty array",
+          "NULL pointer",
+          "Array with all elements equal to a"
+        ],
+        "complexity": "O(n)",
+        "memory_usage": "O(1)",
+        "body": "Iterate over the array from the beginning. If the current element is not equal to a, return its index. If no such element is found, return -1.",
+        "dependencies": []
+      },
+      "postconditions": [
+        {
+          "formal_text": "∀i: 0 ≤ i < size → (arr[i] ≠ a → find_first_not_a(arr, size, a) ≤ i)",
+          "natural_language": "The function returns the smallest index where the array value is not equal to a",
+          "strength": "standard",
+          "category": "correctness",
+          "precise_translation": "For every index i within the array bounds, if the value at index i is not equal to a, then the function's return value is less than or equal to i",
+          "reasoning": "This ensures the function correctly identifies the first occurrence of a value not equal to a",
+          "edge_cases": [
+            "empty array",
+            "NULL pointer",
+            "array with all elements equal to a"
+          ],
+          "edge_cases_covered": [
+            "Empty array: function should return -1",
+            "NULL pointer: function should return -1",
+            "Array with all elements equal to a: function should return -1"
+          ],
+          "coverage_gaps": [
+            "Does not specify behavior for negative array indices"
+          ],
+          "confidence_score": 0.95,
+          "robustness_score": 0.9,
+          "clarity_score": 0.92,
+          "completeness_score": 0.88,
+          "testability_score": 0.9,
+          "mathematical_quality_score": 0.93,
+          "overall_priority_score": 0.9155,
+          "mathematical_validity": "Mathematically sound - proper universal quantification over valid index range",
+          "organization_rank": 0,
+          "importance_category": "critical_correctness",
+          "selection_reasoning": "Primary property defining the function's correctness",
+          "robustness_assessment": "Highly robust - covers all valid indices and edge cases",
+          "is_primary_in_category": false,
+          "recommended_for_selection": true,
+          "z3_theory": "arrays",
+          "z3_translation": {
+            "formal_text": "∀i: 0 ≤ i < size → (arr[i] ≠ a → find_first_not_a(arr, size, a) ≤ i)",
+            "natural_language": "The function returns the smallest index where the array value is not equal to a",
+            "z3_code": "from z3 import *\n\narr = Array('arr', IntSort(), IntSort())\nsize = Int('size')\na = Int('a')\ni = Int('i')\nfind_first_not_a = Function('find_first_not_a', ArraySort(IntSort(), IntSort()), IntSort(), IntSort(), IntSort())\ns = Solver()\ns.add(ForAll(i, Implies(And(i >= 0, i < size), Implies(arr[i] != a, find_first_not_a(arr, size, a) <= i))))\nprint(s.check())",
+            "z3_theory_used": "arrays",
+            "translation_success": true,
+            "translation_time": 0.0,
+            "z3_validation_passed": true,
+            "z3_validation_status": "success",
+            "validation_error": null,
+            "error_type": null,
+            "error_line": null,
+            "validation_warnings": [],
+            "solver_created": false,
+            "constraints_added": 0,
+            "variables_declared": 0,
+            "execution_time": 0.0,
+            "z3_ast": null,
+            "tokens": null,
+            "custom_functions": [],
+            "declared_sorts": [],
+            "declared_variables": {},
+            "warnings": [],
+            "generated_at": "2025-10-02T00:14:21.982139"
+          },
+          "warnings": []
+        },
+        {
+          "formal_text": "find_first_not_a(arr, size, a) < size ∨ find_first_not_a(arr, size, a) = -1",
+          "natural_language": "The function returns a valid index within the array or -1",
+          "strength": "standard",
+          "category": "correctness",
+          "precise_translation": "The function's return value is either a valid index within the array bounds or -1, indicating no such index exists",
+          "reasoning": "This ensures the function's return value is always valid and interpretable",
+          "edge_cases": [
+            "empty array",
+            "NULL pointer",
+            "array with all elements equal to a"
+          ],
+          "edge_cases_covered": [
+            "Empty array: function should return -1",
+            "NULL pointer: function should return -1",
+            "Array with all elements equal to a: function should return -1"
+          ],
+          "coverage_gaps": [
+            "Does not specify behavior for negative array indices"
+          ],
+          "confidence_score": 0.98,
+          "robustness_score": 0.95,
+          "clarity_score": 0.97,
+          "completeness_score": 0.95,
+          "testability_score": 0.95,
+          "mathematical_quality_score": 0.98,
+          "overall_priority_score": 0.9634999999999999,
+          "mathematical_validity": "Mathematically sound - proper use of disjunction",
+          "organization_rank": 1,
+          "importance_category": "essential_boundary",
+          "selection_reasoning": "Important for defining the function's return value range",
+          "robustness_assessment": "Highly robust - covers all possible return values",
+          "is_primary_in_category": false,
+          "recommended_for_selection": true,
+          "z3_theory": "arithmetic",
+          "z3_translation": {
+            "formal_text": "find_first_not_a(arr, size, a) < size ∨ find_first_not_a(arr, size, a) = -1",
+            "natural_language": "The function returns a valid index within the array or -1",
+            "z3_code": "from z3 import *\n\narr = Array('arr', IntSort(), IntSort())\nsize = Int('size')\na = Int('a')\nfind_first_not_a = Function('find_first_not_a', ArraySort(IntSort(), IntSort()), IntSort(), IntSort(), IntSort())\ns = Solver()\ns.add(Or(find_first_not_a(arr, size, a) < size, find_first_not_a(arr, size, a) == -1))\nprint(s.check())",
+            "z3_theory_used": "arithmetic",
+            "translation_success": true,
+            "translation_time": 0.0,
+            "z3_validation_passed": true,
+            "z3_validation_status": "success",
+            "validation_error": null,
+            "error_type": null,
+            "error_line": null,
+            "validation_warnings": [],
+            "solver_created": false,
+            "constraints_added": 0,
+            "variables_declared": 0,
+            "execution_time": 0.0,
+            "z3_ast": null,
+            "tokens": null,
+            "custom_functions": [],
+            "declared_sorts": [],
+            "declared_variables": {},
+            "warnings": [],
+            "generated_at": "2025-10-02T00:14:21.992956"
+          },
+          "warnings": []
+        }
+      ],
+      "postcondition_count": 2,
+      "average_quality_score": 0.9390000000000001,
+      "average_robustness_score": 0.925,
+      "edge_case_coverage_score": 3.0,
+      "mathematical_validity_rate": 0.5,
+      "z3_translations_count": 2,
+      "z3_validations_passed": 2,
+      "z3_validations_failed": 0,
+      "z3_validation_errors": [],
+      "average_solver_creation_rate": 0.0,
+      "average_constraints_per_code": 0.0,
+      "average_variables_per_code": 0.0,
+      "status": "not_started",
+      "error_message": null,
+      "processing_time": 0.0
+    }
+  ],
+  "total_functions": 1,
+  "total_postconditions": 2,
+  "total_z3_translations": 2,
+  "average_quality_score": 0.9390000000000001,
+  "average_robustness_score": 0.925,
+  "average_validation_score": 0.5,
+  "z3_validation_success_rate": 1.0,
+  "solver_creation_rate": 0.0,
+  "status": "success",
+  "errors": [],
+  "warnings": [
+    "✅ All Z3 validations passed!"
+  ],
+  "started_at": "2025-10-02T00:13:32.189933",
+  "completed_at": "2025-10-02T00:14:21.995406",
+  "total_processing_time": 0.0
+}

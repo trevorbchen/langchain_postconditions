@@ -1,50 +1,111 @@
 {
   "functions": [
     {
-      "name": "reverse_list",
-      "description": "Reverses the order of elements in a list",
-      "signature": "void reverse_list(int* list, int size)",
+      "name": "find_shortest_path",
+      "description": "Finds the shortest path in a weighted graph using Dijkstra's algorithm",
+      "signature": "void find_shortest_path(Graph* graph, Node* start, Node* end)",
       "input_parameters": [
         {
-          "name": "list",
-          "data_type": "int*",
-          "description": "Pointer to the list to be reversed",
+          "name": "graph",
+          "data_type": "Graph*",
+          "description": "The graph to search",
           "is_pointer": false,
           "is_array": false,
           "is_const": false
         },
         {
-          "name": "size",
-          "data_type": "int",
-          "description": "Size of the list",
+          "name": "start",
+          "data_type": "Node*",
+          "description": "The starting node",
+          "is_pointer": false,
+          "is_array": false,
+          "is_const": false
+        },
+        {
+          "name": "end",
+          "data_type": "Node*",
+          "description": "The ending node",
           "is_pointer": false,
           "is_array": false,
           "is_const": false
         }
       ],
       "output_parameters": [],
-      "return_values": [],
+      "return_values": [
+        {
+          "condition": "success",
+          "value": "0",
+          "description": "The shortest path was found",
+          "name": "result"
+        },
+        {
+          "condition": "failure",
+          "value": "-1",
+          "description": "The shortest path was not found",
+          "name": "result"
+        }
+      ],
       "return_type": "void",
       "preconditions": [
-        "list != NULL",
-        "size > 0"
+        "graph != NULL",
+        "start != NULL",
+        "end != NULL"
       ],
       "edge_cases": [
-        "Empty list",
-        "NULL pointer",
-        "Single element list"
+        "Graph with no nodes",
+        "Graph with no edges",
+        "Start node is the same as end node"
       ],
-      "complexity": "O(n)",
-      "memory_usage": "O(1)",
-      "body": "1. Initialize start to 0 and end to size-1\n2. While start is less than end, swap the elements at these positions in the list\n3. Increment start and decrement end\n4. Repeat steps 2-3 until the list is reversed",
+      "complexity": "O(V^2)",
+      "memory_usage": "O(V)",
+      "body": "Initialize a priority queue with the start node. While the queue is not empty, dequeue the node with the smallest distance, update the distances of its adjacent nodes, and enqueue them. Repeat until the end node is dequeued.",
       "dependencies": []
     }
   ],
-  "structs": [],
+  "structs": [
+    {
+      "name": "Node",
+      "fields": [
+        {
+          "name": "id",
+          "data_type": "int",
+          "description": "The unique identifier of the node"
+        },
+        {
+          "name": "distance",
+          "data_type": "int",
+          "description": "The shortest distance from the start node"
+        },
+        {
+          "name": "adjacent_nodes",
+          "data_type": "Node**",
+          "description": "The nodes adjacent to this node"
+        }
+      ],
+      "description": "Represents a node in the graph"
+    },
+    {
+      "name": "Graph",
+      "fields": [
+        {
+          "name": "nodes",
+          "data_type": "Node**",
+          "description": "The nodes in the graph"
+        },
+        {
+          "name": "num_nodes",
+          "data_type": "int",
+          "description": "The number of nodes in the graph"
+        }
+      ],
+      "description": "Represents a weighted graph"
+    }
+  ],
   "enums": [],
   "global_variables": [],
   "includes": [
-    "stdio.h"
+    "stdio.h",
+    "stdlib.h"
   ],
   "dependencies": [],
   "metadata": {}

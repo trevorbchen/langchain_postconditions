@@ -309,8 +309,27 @@ class PostconditionPipeline:
                 f"below threshold ({settings.z3_validation.min_solver_creation_rate:.1%})"
             )
     
-    def save_results(self, result: CompleteEnhancedResult, output_dir: Path) -> None:
-        """Save results to files with verification."""
+    def save_results(self, result: CompleteEnhancedResult, output_dir: Path) -> Path:
+        """
+        Save results to timestamped folder (pseudo-database approach).
+        
+        Each run creates a new folder:
+        output/pipeline_results/
+            2025-10-01_23-22-35_reverse_list/
+                complete_result.json
+                pseudocode/
+                validation_report.txt
+            2025-10-01_23-45-12_binary_search/
+                complete_result.json
+                ...
+        
+        Args:
+            result: CompleteEnhancedResult to save
+            output_dir: Base output directory (e.g., output/pipeline_results)
+            
+        Returns:
+            Path to the created timestamped folder
+        """
         import logging
         logger = logging.getLogger(__name__)
         
@@ -318,21 +337,32 @@ class PostconditionPipeline:
         if not output_dir.is_absolute():
             output_dir = output_dir.resolve()
         
-        logger.info(f"SAVING RESULTS TO: {output_dir}")
+        # 🆕 CREATE TIMESTAMPED FOLDER
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        
+        # Extract safe folder name from specification (first 3 words, sanitized)
+        spec_words = result.specification.lower().split()[:3]
+        spec_name = "_".join("".join(c for c in word if c.isalnum()) for word in spec_words)
+        
+        # Create unique folder name: timestamp_specification
+        folder_name = f"{timestamp}_{spec_name}"
+        session_dir = output_dir / folder_name
+        
+        logger.info(f"📁 Creating new session folder: {folder_name}")
         
         # Create directory
         try:
-            output_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"✅ Directory created: {output_dir}")
+            session_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"✅ Session directory created: {session_dir}")
         except Exception as e:
-            logger.error(f"❌ Failed to create directory: {e}")
+            logger.error(f"❌ Failed to create session directory: {e}")
             raise
         
         files_created = []
         
-        # Save JSON
+        # 1. Save complete JSON result
         try:
-            json_path = output_dir / "complete_result.json"
+            json_path = session_dir / "complete_result.json"
             with open(json_path, 'w', encoding='utf-8') as f:
                 f.write(result.model_dump_json(indent=2))
                 f.flush()
@@ -340,107 +370,90 @@ class PostconditionPipeline:
             
             if json_path.exists():
                 size = json_path.stat().st_size
-                logger.info(f"✅ Created: {json_path} ({size:,} bytes)")
+                logger.info(f"✅ Saved: complete_result.json ({size:,} bytes)")
                 files_created.append(("complete_result.json", size))
         except Exception as e:
             logger.error(f"❌ Failed to save JSON: {e}")
             raise
         
-        # Save pseudocode
+        # 2. Save pseudocode
         if result.pseudocode_result:
             try:
-                self._save_pseudocode(result.pseudocode_result, output_dir)
-                pseudocode_dir = output_dir / "pseudocode"
+                self._save_pseudocode(result.pseudocode_result, session_dir)
+                pseudocode_dir = session_dir / "pseudocode"
                 if pseudocode_dir.exists():
                     for pf in pseudocode_dir.glob("*"):
                         if pf.is_file():
                             size = pf.stat().st_size
+                            logger.info(f"✅ Saved: pseudocode/{pf.name} ({size:,} bytes)")
                             files_created.append((f"pseudocode/{pf.name}", size))
             except Exception as e:
                 logger.error(f"❌ Failed to save pseudocode: {e}")
         
-        # Save validation report
+        # 3. Save postconditions by function
+        try:
+            self._save_postconditions_detailed(result, session_dir)
+            postcond_dir = session_dir / "postconditions"
+            if postcond_dir.exists():
+                for pf in postcond_dir.glob("*"):
+                    if pf.is_file():
+                        size = pf.stat().st_size
+                        logger.info(f"✅ Saved: postconditions/{pf.name} ({size:,} bytes)")
+                        files_created.append((f"postconditions/{pf.name}", size))
+        except Exception as e:
+            logger.error(f"❌ Failed to save postconditions: {e}")
+        
+        # 4. Save Z3 code
+        try:
+            self._save_z3_code(result, session_dir)
+            z3_dir = session_dir / "z3_code"
+            if z3_dir.exists():
+                for pf in z3_dir.glob("*"):
+                    if pf.is_file():
+                        size = pf.stat().st_size
+                        logger.info(f"✅ Saved: z3_code/{pf.name} ({size:,} bytes)")
+                        files_created.append((f"z3_code/{pf.name}", size))
+        except Exception as e:
+            logger.error(f"❌ Failed to save Z3 code: {e}")
+        
+        # 5. Save validation report
         if settings.z3_validation.generate_reports:
             try:
-                self._save_validation_report(result, output_dir)
-                report_path = output_dir / "validation_report.txt"
+                self._save_validation_report(result, session_dir)
+                report_path = session_dir / "validation_report.txt"
                 if report_path.exists():
                     size = report_path.stat().st_size
+                    logger.info(f"✅ Saved: validation_report.txt ({size:,} bytes)")
                     files_created.append(("validation_report.txt", size))
             except Exception as e:
                 logger.error(f"❌ Failed to save validation report: {e}")
         
+        # 6. Save session metadata
+        try:
+            self._save_session_metadata(result, session_dir, folder_name)
+            meta_path = session_dir / "session_metadata.txt"
+            if meta_path.exists():
+                size = meta_path.stat().st_size
+                logger.info(f"✅ Saved: session_metadata.txt ({size:,} bytes)")
+                files_created.append(("session_metadata.txt", size))
+        except Exception as e:
+            logger.error(f"❌ Failed to save session metadata: {e}")
+        
         # Summary
-        logger.info(f"Total files created: {len(files_created)}")
+        logger.info(f"\n📊 Session Summary:")
+        logger.info(f"   Folder: {folder_name}")
+        logger.info(f"   Total files: {len(files_created)}")
         for filename, size in files_created:
-            logger.info(f"  ✓ {filename} ({size:,} bytes)")
+            logger.info(f"     ✓ {filename} ({size:,} bytes)")
         
         if not files_created:
             raise RuntimeError("No files were created")
         
-        print(f"\n✅ Results saved to: {output_dir}")
-        print(f"   📄 {', '.join([f[0] for f in files_created])}")
-    
-    def _save_pseudocode(self, pseudocode: PseudocodeResult, output_dir: Path):
-        """Save pseudocode files."""
-        pseudocode_dir = output_dir / "pseudocode"
-        pseudocode_dir.mkdir(exist_ok=True)
+        print(f"\n✅ Results saved to new session: {session_dir}")
+        print(f"   📁 Session: {folder_name}")
+        print(f"   📄 Files: {len(files_created)}")
         
-        summary_path = pseudocode_dir / "pseudocode_summary.txt"
-        with open(summary_path, 'w', encoding='utf-8') as f:
-            f.write("=" * 70 + "\n")
-            f.write("PSEUDOCODE SUMMARY\n")
-            f.write("=" * 70 + "\n\n")
-            for func in pseudocode.functions:
-                f.write(f"Function: {func.name}\n")
-                f.write(f"Signature: {func.signature}\n")
-                f.write(f"Description: {func.description}\n\n")
-            f.flush()
-            os.fsync(f.fileno())
-        
-        json_path = pseudocode_dir / "pseudocode_full.json"
-        with open(json_path, 'w', encoding='utf-8') as f:
-            f.write(pseudocode.model_dump_json(indent=2))
-            f.flush()
-            os.fsync(f.fileno())
-    
-    def _save_validation_report(self, result: CompleteEnhancedResult, output_dir: Path):
-        """Save validation report."""
-        report_path = output_dir / "validation_report.txt"
-        
-        with open(report_path, 'w', encoding='utf-8') as f:
-            f.write("=" * 80 + "\n")
-            f.write("Z3 VALIDATION REPORT\n")
-            f.write("=" * 80 + "\n\n")
-            f.write(f"Session ID: {result.session_id}\n")
-            f.write(f"Generated: {result.started_at}\n\n")
-            f.write("📊 OVERVIEW\n")
-            f.write("-" * 80 + "\n")
-            f.write(f"Total Functions:        {result.total_functions}\n")
-            f.write(f"Total Postconditions:   {result.total_postconditions}\n")
-            f.write(f"Total Z3 Translations:  {result.total_z3_translations}\n\n")
-            f.write("✅ VALIDATION RESULTS\n")
-            f.write("-" * 80 + "\n")
-            f.write(f"Success Rate:           {result.z3_validation_success_rate:.1%}\n")
-            f.write(f"Solver Creation Rate:   {result.solver_creation_rate:.1%}\n")
-            f.write(f"Average Quality:        {result.average_quality_score:.2f}\n")
-            f.write(f"Average Validation:     {result.average_validation_score:.2f}\n\n")
-            
-            for fr in result.function_results:
-                f.write(f"\nFunction: {fr.function_name}\n")
-                f.write(f"  Postconditions:       {fr.postcondition_count}\n")
-                f.write(f"  Z3 Translations:      {fr.z3_translations_count}\n")
-                f.write(f"  Validations Passed:   {fr.z3_validations_passed}/{fr.z3_translations_count}\n")
-            
-            if result.warnings:
-                f.write("\n\n⚠️  WARNINGS\n")
-                f.write("-" * 80 + "\n")
-                for warning in result.warnings:
-                    f.write(f"{warning}\n")
-            
-            f.write("\n" + "=" * 80 + "\n")
-            f.flush()
-            os.fsync(f.fileno())
+        return session_dir
 
 
 def process_specification(specification: str, codebase_path: Optional[Path] = None) -> CompleteEnhancedResult:
