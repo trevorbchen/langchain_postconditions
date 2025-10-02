@@ -2,7 +2,7 @@
 PSEUDOCODE SUMMARY
 ======================================================================
 
-Function: sort_by_ones
-Signature: void sort_by_ones(int* arr, int size)
-Description: Sorts an array by its ones digit
+Function: reverse_list
+Signature: void reverse_list(int* list, int size)
+Description: Reverses the order of elements in a list
 

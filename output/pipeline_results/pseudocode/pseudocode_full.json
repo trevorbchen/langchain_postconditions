@@ -1,14 +1,14 @@
 {
   "functions": [
     {
-      "name": "sort_by_ones",
-      "description": "Sorts an array by its ones digit",
-      "signature": "void sort_by_ones(int* arr, int size)",
+      "name": "reverse_list",
+      "description": "Reverses the order of elements in a list",
+      "signature": "void reverse_list(int* list, int size)",
       "input_parameters": [
         {
-          "name": "arr",
+          "name": "list",
           "data_type": "int*",
-          "description": "Array to be sorted",
+          "description": "Pointer to the list to be reversed",
           "is_pointer": false,
           "is_array": false,
           "is_const": false
@@ -16,34 +16,27 @@
         {
           "name": "size",
           "data_type": "int",
-          "description": "Size of the array",
+          "description": "Size of the list",
           "is_pointer": false,
           "is_array": false,
           "is_const": false
         }
       ],
       "output_parameters": [],
-      "return_values": [
-        {
-          "condition": "success",
-          "value": "0",
-          "description": "Array sorted successfully",
-          "name": "result"
-        }
-      ],
+      "return_values": [],
       "return_type": "void",
       "preconditions": [
-        "arr != NULL",
+        "list != NULL",
         "size > 0"
       ],
       "edge_cases": [
-        "Empty array",
+        "Empty list",
         "NULL pointer",
-        "Single element"
+        "Single element list"
       ],
-      "complexity": "O(n log n)",
+      "complexity": "O(n)",
       "memory_usage": "O(1)",
-      "body": "Use a stable sorting algorithm (like Bubble Sort, Insertion Sort etc.) and modify the comparison operation to compare the ones digit of the numbers",
+      "body": "1. Initialize start to 0 and end to size-1\n2. While start is less than end, swap the elements at these positions in the list\n3. Increment start and decrement end\n4. Repeat steps 2-3 until the list is reversed",
       "dependencies": []
     }
   ],

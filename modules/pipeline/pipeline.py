@@ -138,7 +138,7 @@ class PostconditionPipeline:
             logger.info("Step 5: Generating validation report...")
             self._generate_validation_report(result)
             
-            result.overall_status = ProcessingStatus.SUCCESS  # ✅ Fixed: was 'status'
+            result.status = ProcessingStatus.SUCCESS
             result.completed_at = datetime.now().isoformat()
             
             logger.info(f"Pipeline completed successfully for session {session_id}")

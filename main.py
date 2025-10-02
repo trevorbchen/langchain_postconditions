@@ -2,21 +2,8 @@
 """
 Interactive Main Interface for Postcondition Generation Pipeline
 
-This script provides a user-friendly command-line interface for generating
-postconditions from natural language specifications.
-
-Features:
-- Interactive specification input
-- Progress tracking
-- Rich result display
-- Automatic result saving
-- Session management
-- Error handling
-
-Usage:
-    python main.py                    # Interactive mode
-    python main.py --spec "sort array"  # Direct mode
-    python main.py --help             # Show help
+Updated to work with current CompleteEnhancedResult model.
+All field references corrected to match core/models.py.
 """
 
 import sys
@@ -177,7 +164,7 @@ def get_output_preference() -> Path:
 
 
 # ============================================================================
-# RESULT DISPLAY FUNCTIONS
+# RESULT DISPLAY FUNCTIONS (✅ UPDATED FOR CURRENT MODEL)
 # ============================================================================
 
 def display_result_summary(result):
@@ -189,18 +176,31 @@ def display_result_summary(result):
     """
     print_section("📊 Results Summary")
     
-    # Status
-    status_color = Colors.OKGREEN if result.overall_status == ProcessingStatus.SUCCESS else Colors.WARNING
-    print(f"\n{Colors.BOLD}Status:{Colors.ENDC} {status_color}{result.overall_status.value.upper()}{Colors.ENDC}")
+    # Status - ✅ FIXED: Use 'status' not 'overall_status'
+    status_color = Colors.OKGREEN if result.status == ProcessingStatus.SUCCESS else Colors.WARNING
+    print(f"\n{Colors.BOLD}Status:{Colors.ENDC} {status_color}{result.status.value.upper()}{Colors.ENDC}")
     print(f"{Colors.BOLD}Session ID:{Colors.ENDC} {result.session_id}")
     print(f"{Colors.BOLD}Processing Time:{Colors.ENDC} {result.total_processing_time:.1f}s")
     
-    # Generation statistics
+    # Generation statistics - ✅ FIXED: Use correct field names
     print(f"\n{Colors.BOLD}Generation Statistics:{Colors.ENDC}")
-    print(f"  • Functions Created: {len(result.functions_created)}")
+    print(f"  • Functions Created: {result.total_functions}")
     print(f"  • Total Postconditions: {result.total_postconditions}")
-    print(f"  • Z3 Translations: {result.successful_z3_translations}/{result.total_z3_translations}")
-    print(f"  • Validated Z3 Code: {result.validated_z3_translations}/{result.total_z3_translations}")
+    
+    # Calculate Z3 stats from function_results (fields don't exist at top level)
+    successful_z3 = sum(fr.z3_translations_count for fr in result.function_results)
+    validated_z3 = sum(fr.z3_validations_passed for fr in result.function_results)
+    
+    print(f"  • Z3 Translations: {successful_z3}/{result.total_z3_translations}")
+    print(f"  • Validated Z3 Code: {validated_z3}/{result.total_z3_translations}")
+    
+    # Quality metrics (if available)
+    if result.average_quality_score > 0:
+        print(f"\n{Colors.BOLD}Quality Metrics:{Colors.ENDC}")
+        print(f"  • Average Quality: {result.average_quality_score:.2f}")
+        print(f"  • Average Robustness: {result.average_robustness_score:.2f}")
+        if result.z3_validation_success_rate > 0:
+            print(f"  • Z3 Validation Rate: {result.z3_validation_success_rate:.1%}")
     
     # Function details
     if result.function_results:
@@ -212,14 +212,10 @@ def display_result_summary(result):
             
             if func_result.postcondition_count > 0:
                 print(f"    Avg Quality: {func_result.average_quality_score:.2f}")
-                
-                if hasattr(func_result, 'average_robustness_score'):
-                    print(f"    Avg Robustness: {func_result.average_robustness_score:.2f}")
-                
-                if hasattr(func_result, 'edge_case_coverage_score'):
-                    print(f"    Edge Cases/PC: {func_result.edge_case_coverage_score:.1f}")
-                
-                print(f"    Z3 Success: {func_result.z3_success_count}/{func_result.postcondition_count}")
+                print(f"    Avg Robustness: {func_result.average_robustness_score:.2f}")
+                print(f"    Edge Cases/PC: {func_result.edge_case_coverage_score:.1f}")
+                # ✅ FIXED: Use z3_validations_passed, not z3_success_count
+                print(f"    Z3 Validated: {func_result.z3_validations_passed}/{func_result.postcondition_count}")
 
 
 def display_sample_postconditions(result, max_samples: int = 2):
@@ -232,10 +228,17 @@ def display_sample_postconditions(result, max_samples: int = 2):
     """
     print_section("📋 Sample Postconditions")
     
+    if not result.function_results:
+        print(f"{Colors.WARNING}No postconditions generated.{Colors.ENDC}")
+        return
+    
     shown = 0
     for func_result in result.function_results:
         if shown >= max_samples:
             break
+        
+        if not func_result.postconditions:
+            continue
         
         print(f"\n{Colors.OKCYAN}Function:{Colors.ENDC} {func_result.function_name}")
         
@@ -247,15 +250,17 @@ def display_sample_postconditions(result, max_samples: int = 2):
             print(f"    Formal: {pc.formal_text}")
             print(f"    Natural: {pc.natural_language}")
             
-            if hasattr(pc, 'precise_translation') and pc.precise_translation:
+            # Check for optional enhanced fields
+            if pc.precise_translation:
                 print(f"    Translation: {pc.precise_translation[:100]}...")
             
-            if hasattr(pc, 'reasoning') and pc.reasoning:
+            if pc.reasoning:
                 print(f"    Reasoning: {pc.reasoning[:100]}...")
             
+            # Use property for overall quality score
             print(f"    Quality: {pc.overall_quality_score:.2f}")
             
-            if hasattr(pc, 'z3_theory') and pc.z3_theory:
+            if pc.z3_theory and pc.z3_theory != "unknown":
                 print(f"    Z3 Theory: {pc.z3_theory}")
             
             shown += 1
@@ -278,9 +283,9 @@ def display_errors_warnings(result):
             print_error(error)
     
     if result.warnings:
-        print_section("ℹ️  Information")
+        print_section("ℹ️  Warnings")
         for warning in result.warnings:
-            print_info(warning)
+            print_warning(warning)
 
 
 def display_saved_location(saved_path: Path):
@@ -290,15 +295,13 @@ def display_saved_location(saved_path: Path):
     Args:
         saved_path: Path to saved results directory
     """
-    print_section("💾 Results Saved")
+    print(f"\n✅ Results saved to: {Colors.BOLD}{saved_path}{Colors.ENDC}")
     
-    print(f"\n{Colors.BOLD}Results saved to:{Colors.ENDC} {saved_path}")
-    print(f"\n{Colors.BOLD}Files created:{Colors.ENDC}")
-    print(f"  • result.json - Complete structured data")
-    print(f"  • postconditions_summary.txt - Human-readable summary")
-    print(f"  • z3_code/*.py - Z3 verification code")
-    
-    print(f"\n{Colors.OKBLUE}You can view these files in your file browser or editor.{Colors.ENDC}")
+    # List actual files that were created
+    if saved_path.exists():
+        files = list(saved_path.glob("*"))
+        if files:
+            print(f"   📄 {', '.join(f.name for f in files)}")
 
 
 # ============================================================================
@@ -330,14 +333,14 @@ def run_pipeline(specification: str, output_dir: Path, codebase_path: Optional[P
         
         # Save results
         print_info("Saving results...")
-        saved_path = pipeline.save_results(result, output_dir)
+        pipeline.save_results(result, output_dir)
         
         # Display results
         print_success("Pipeline completed!")
         display_result_summary(result)
         display_sample_postconditions(result)
         display_errors_warnings(result)
-        display_saved_location(saved_path)
+        display_saved_location(output_dir)
         
         return result
     
@@ -378,7 +381,7 @@ def interactive_mode():
     
     # Final message
     print(f"\n{Colors.HEADER}{'='*80}{Colors.ENDC}")
-    if result and result.overall_status == ProcessingStatus.SUCCESS:
+    if result and result.status == ProcessingStatus.SUCCESS:
         print_success("All done! Check the output files for detailed results.")
     else:
         print_warning("Pipeline completed with issues. Check errors above.")
@@ -405,7 +408,7 @@ def command_line_mode(args):
     result = run_pipeline(specification, output_dir, codebase_path)
     
     # Exit with appropriate code
-    if result and result.overall_status == ProcessingStatus.SUCCESS:
+    if result and result.status == ProcessingStatus.SUCCESS:
         sys.exit(0)
     else:
         sys.exit(1)
