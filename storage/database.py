@@ -1,603 +1,582 @@
 """
-Storage module for postcondition generation results.
+Enhanced Database Manager - Comprehensive Data Persistence
 
-Provides dual storage:
-1. Request-centric: outputs/requests/{request_id}/
-2. Function-centric: outputs/functions/{function_name}/
+Saves ALL rich data from pipeline including full generation history,
+quality trends, and detailed analysis results.
 """
 
 import json
-import logging
 from pathlib import Path
-from typing import List, Dict, Optional, Any
 from datetime import datetime
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass, field
+import logging
 
 from core.models import (
-    CompleteEnhancedResult,
-    FunctionResult,
     EnhancedPostcondition,
     Z3Translation,
-    Function
+    FunctionResult,
+    CompleteEnhancedResult
 )
 
 logger = logging.getLogger(__name__)
 
 
-class ResultStorage:
-    """Handles storage and retrieval of postcondition generation results."""
+# ============================================================================
+# HELPER CLASSES FOR COMPREHENSIVE METADATA
+# ============================================================================
+
+@dataclass
+class GenerationSnapshot:
+    """Complete snapshot of a single generation run."""
+    session_id: str
+    timestamp: str
+    specification: str
+    function_signature: str
+    function_description: str
+    function_body: Optional[str] = None
+    postconditions: List[Dict[str, Any]] = field(default_factory=list)
+    total_postconditions: int = 0
+    average_confidence: float = 0.0
+    average_robustness: float = 0.0
+    average_quality: float = 0.0
+    total_edge_cases_covered: int = 0
+    unique_edge_cases: List[str] = field(default_factory=list)
+    coverage_gaps_found: List[str] = field(default_factory=list)
+    z3_translations_generated: int = 0
+    z3_validations_passed: int = 0
+    z3_validations_failed: int = 0
+    z3_validation_errors: List[str] = field(default_factory=list)
+    z3_theories_used: List[str] = field(default_factory=list)
+    generation_time: float = 0.0
+    translation_time: float = 0.0
+    validation_time: float = 0.0
+    total_time: float = 0.0
+    status: str = "success"
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
     
-    def __init__(self, output_dir: Path):
-        """
-        Initialize storage with output directory.
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "session_id": self.session_id,
+            "timestamp": self.timestamp,
+            "specification": self.specification,
+            "function_signature": self.function_signature,
+            "function_description": self.function_description,
+            "function_body": self.function_body,
+            "postconditions": self.postconditions,
+            "total_postconditions": self.total_postconditions,
+            "average_confidence": self.average_confidence,
+            "average_robustness": self.average_robustness,
+            "average_quality": self.average_quality,
+            "total_edge_cases_covered": self.total_edge_cases_covered,
+            "unique_edge_cases": self.unique_edge_cases,
+            "coverage_gaps_found": self.coverage_gaps_found,
+            "z3_translations_generated": self.z3_translations_generated,
+            "z3_validations_passed": self.z3_validations_passed,
+            "z3_validations_failed": self.z3_validations_failed,
+            "z3_validation_errors": self.z3_validation_errors,
+            "z3_theories_used": self.z3_theories_used,
+            "generation_time": self.generation_time,
+            "translation_time": self.translation_time,
+            "validation_time": self.validation_time,
+            "total_time": self.total_time,
+            "status": self.status,
+            "errors": self.errors,
+            "warnings": self.warnings
+        }
+
+
+@dataclass
+class ComprehensiveFunctionMetadata:
+    """Comprehensive metadata tracking all generations for a function."""
+    function_name: str
+    function_signature: str
+    function_description: str
+    first_seen: str
+    last_updated: str
+    total_generations: int = 0
+    generations_history: List[Dict[str, Any]] = field(default_factory=list)
+    total_postconditions_ever_generated: int = 0
+    unique_postconditions_count: int = 0
+    current_postconditions: List[Dict[str, Any]] = field(default_factory=list)
+    quality_trend: List[float] = field(default_factory=list)
+    robustness_trend: List[float] = field(default_factory=list)
+    confidence_trend: List[float] = field(default_factory=list)
+    total_z3_translations: int = 0
+    total_z3_validations_passed: int = 0
+    total_z3_validations_failed: int = 0
+    z3_theories_encountered: List[str] = field(default_factory=list)
+    all_edge_cases_covered: List[str] = field(default_factory=list)
+    recurring_coverage_gaps: List[str] = field(default_factory=list)
+    edge_case_coverage_improvement: float = 0.0
+    average_generation_time: float = 0.0
+    fastest_generation_time: float = 0.0
+    slowest_generation_time: float = 0.0
+    best_generation_session_id: Optional[str] = None
+    best_generation_quality_score: float = 0.0
+    status: str = "active"
+    last_error: Optional[str] = None
+    warnings_count: int = 0
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "function_name": self.function_name,
+            "function_signature": self.function_signature,
+            "function_description": self.function_description,
+            "first_seen": self.first_seen,
+            "last_updated": self.last_updated,
+            "total_generations": self.total_generations,
+            "generations_history": self.generations_history,
+            "total_postconditions_ever_generated": self.total_postconditions_ever_generated,
+            "unique_postconditions_count": self.unique_postconditions_count,
+            "current_postconditions": self.current_postconditions,
+            "quality_trend": self.quality_trend,
+            "robustness_trend": self.robustness_trend,
+            "confidence_trend": self.confidence_trend,
+            "total_z3_translations": self.total_z3_translations,
+            "total_z3_validations_passed": self.total_z3_validations_passed,
+            "total_z3_validations_failed": self.total_z3_validations_failed,
+            "z3_theories_encountered": self.z3_theories_encountered,
+            "all_edge_cases_covered": self.all_edge_cases_covered,
+            "recurring_coverage_gaps": self.recurring_coverage_gaps,
+            "edge_case_coverage_improvement": self.edge_case_coverage_improvement,
+            "average_generation_time": self.average_generation_time,
+            "fastest_generation_time": self.fastest_generation_time,
+            "slowest_generation_time": self.slowest_generation_time,
+            "best_generation_session_id": self.best_generation_session_id,
+            "best_generation_quality_score": self.best_generation_quality_score,
+            "status": self.status,
+            "last_error": self.last_error,
+            "warnings_count": self.warnings_count
+        }
+    
+    def add_generation(self, snapshot: GenerationSnapshot) -> None:
+        """Add a generation snapshot and update aggregate metrics."""
+        self.total_generations += 1
+        self.generations_history.append(snapshot.to_dict())
+        self.last_updated = snapshot.timestamp
+        self.total_postconditions_ever_generated += snapshot.total_postconditions
         
-        Args:
-            output_dir: Base directory for storing results
-        """
-        self.output_dir = Path(output_dir)
-        self.requests_dir = self.output_dir / "requests"
-        self.functions_dir = self.output_dir / "functions"  # 🆕 NEW
+        # Update trends
+        self.quality_trend.append(snapshot.average_quality)
+        self.robustness_trend.append(snapshot.average_robustness)
+        self.confidence_trend.append(snapshot.average_confidence)
+        
+        # Update Z3 stats
+        self.total_z3_translations += snapshot.z3_translations_generated
+        self.total_z3_validations_passed += snapshot.z3_validations_passed
+        self.total_z3_validations_failed += snapshot.z3_validations_failed
+        
+        # Update edge cases
+        for edge_case in snapshot.unique_edge_cases:
+            if edge_case not in self.all_edge_cases_covered:
+                self.all_edge_cases_covered.append(edge_case)
+        
+        # Update performance metrics
+        times = [g["total_time"] for g in self.generations_history]
+        self.average_generation_time = sum(times) / len(times)
+        self.fastest_generation_time = min(times) if times else 0.0
+        self.slowest_generation_time = max(times) if times else 0.0
+        
+        # Track best generation
+        if snapshot.average_quality > self.best_generation_quality_score:
+            self.best_generation_quality_score = snapshot.average_quality
+            self.best_generation_session_id = snapshot.session_id
+        
+        # Update current postconditions
+        self.current_postconditions = snapshot.postconditions
+
+
+def convert_postcondition_to_dict(pc: Any, session_id: str) -> Dict[str, Any]:
+    """Convert EnhancedPostcondition to dictionary."""
+    z3_trans_dict = None
+    if hasattr(pc, 'z3_translation') and pc.z3_translation:
+        if hasattr(pc.z3_translation, 'model_dump'):
+            z3_trans_dict = pc.z3_translation.model_dump()
+        elif hasattr(pc.z3_translation, 'dict'):
+            z3_trans_dict = pc.z3_translation.dict()
+        else:
+            z3_trans_dict = vars(pc.z3_translation)
+    
+    return {
+        "formal_text": pc.formal_text,
+        "natural_language": pc.natural_language,
+        "precise_translation": getattr(pc, 'precise_translation', ''),
+        "reasoning": getattr(pc, 'reasoning', ''),
+        "strength": getattr(pc, 'strength', 'standard'),
+        "category": getattr(pc, 'category', 'core_correctness'),
+        "edge_cases": getattr(pc, 'edge_cases', []),
+        "edge_cases_covered": getattr(pc, 'edge_cases_covered', []),
+        "coverage_gaps": getattr(pc, 'coverage_gaps', []),
+        "confidence_score": pc.confidence_score,
+        "robustness_score": getattr(pc, 'robustness_score', 0.0),
+        "clarity_score": getattr(pc, 'clarity_score', 0.0),
+        "completeness_score": getattr(pc, 'completeness_score', 0.0),
+        "testability_score": getattr(pc, 'testability_score', 0.0),
+        "mathematical_quality_score": getattr(pc, 'mathematical_quality_score', 0.0),
+        "overall_quality_score": getattr(pc, 'overall_quality_score', 0.0),
+        "mathematical_validity": getattr(pc, 'mathematical_validity', ''),
+        "z3_theory": getattr(pc, 'z3_theory', 'unknown'),
+        "z3_translation": z3_trans_dict,
+        "generated_at": datetime.now().isoformat(),
+        "generation_session_id": session_id
+    }
+
+
+# ============================================================================
+# MAIN DATABASE MANAGER
+# ============================================================================
+
+class EnhancedDatabaseManager:
+    """
+    Manages comprehensive persistence of ALL generated data.
+    
+    Features:
+    - Full generation history tracking
+    - Rich postcondition metadata
+    - Quality trends over time
+    - Z3 validation tracking
+    - Edge case intelligence
+    - Performance metrics
+    """
+    
+    def __init__(self, base_dir: str = "data"):
+        """Initialize database manager."""
+        self.base_dir = Path(base_dir)
+        self.functions_dir = self.base_dir / "functions"
+        self.sessions_dir = self.base_dir / "sessions"
         
         # Create directories
-        self.requests_dir.mkdir(parents=True, exist_ok=True)
         self.functions_dir.mkdir(parents=True, exist_ok=True)
+        self.sessions_dir.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"Storage initialized: {self.output_dir}")
+        logger.info(f"Enhanced database initialized at {self.base_dir}")
     
-    # =========================================================================
-    # REQUEST-CENTRIC STORAGE (Existing - Backward Compatible)
-    # =========================================================================
-    
-    def save_results(self, request_id: str, result: CompleteEnhancedResult) -> Path:
+    def save_pipeline_result(
+        self,
+        session_id: str,
+        specification: str,
+        function_results: List[FunctionResult],
+        total_time: float
+    ) -> None:
         """
-        Save results organized by request ID (backward compatible).
+        Save complete pipeline results with comprehensive metadata.
         
         Args:
-            request_id: Unique request identifier
-            result: Pipeline result containing all function results
-            
-        Returns:
-            Path to the saved request directory
+            session_id: Unique session identifier
+            specification: Original specification
+            function_results: List of function results
+            total_time: Total processing time
         """
-        request_dir = self.requests_dir / request_id
-        request_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Saving pipeline result for session {session_id}")
         
-        # Save metadata
-        metadata = {
-            "request_id": request_id,
-            "session_id": result.session_id,
-            "timestamp": result.started_at,
-            "specification": result.specification,
-            "function_count": len(result.function_results),
-            "total_postconditions": result.total_postconditions,
-            "status": result.status.value,
-            "errors": result.errors,
-            "warnings": result.warnings,
-        }
-        
-        metadata_file = request_dir / "metadata.json"
-        with open(metadata_file, 'w', encoding='utf-8') as f:
-            json.dump(metadata, f, indent=2)
-        
-        # Save each function's results
-        for func_result in result.function_results:
-            self._save_function_result_to_request(request_dir, func_result)
-        
-        logger.info(f"Saved results to {request_dir}")
-        return request_dir
-    
-    def _save_function_result_to_request(
-        self,
-        request_dir: Path,
-        func_result: FunctionResult
-    ):
-        """Save individual function result to request directory."""
-        func_dir = request_dir / func_result.function_name
-        func_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Save postconditions
-        if func_result.postconditions:
-            postconditions_file = func_dir / "postconditions.json"
-            postconditions_data = [
-                pc.model_dump() for pc in func_result.postconditions
-            ]
-            with open(postconditions_file, 'w', encoding='utf-8') as f:
-                json.dump(postconditions_data, f, indent=2)
-        
-        # Save function metadata
-        func_metadata = {
-            "function_name": func_result.function_name,
-            "function_signature": func_result.function_signature,
-            "function_description": func_result.function_description,
-            "postcondition_count": func_result.postcondition_count,
-            "z3_translations_count": func_result.z3_translations_count,
-            "status": func_result.status.value,
-        }
-        
-        metadata_file = func_dir / "metadata.json"
-        with open(metadata_file, 'w', encoding='utf-8') as f:
-            json.dump(func_metadata, f, indent=2)
-    
-    def load_results(self, request_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Load results for a specific request ID.
-        
-        Args:
-            request_id: Request identifier
-            
-        Returns:
-            Dictionary containing request results or None if not found
-        """
-        request_dir = self.requests_dir / request_id
-        
-        if not request_dir.exists():
-            logger.warning(f"Request directory not found: {request_dir}")
-            return None
-        
-        # Load metadata
-        metadata_file = request_dir / "metadata.json"
-        if not metadata_file.exists():
-            logger.warning(f"Metadata file not found: {metadata_file}")
-            return None
-        
-        with open(metadata_file, 'r', encoding='utf-8') as f:
-            metadata = json.load(f)
-        
-        # Load function results
-        function_results = {}
-        for func_dir in request_dir.iterdir():
-            if func_dir.is_dir():
-                func_data = self._load_function_result_from_request(func_dir)
-                if func_data:
-                    function_results[func_dir.name] = func_data
-        
-        metadata['function_results'] = function_results
-        return metadata
-    
-    def _load_function_result_from_request(
-        self,
-        func_dir: Path
-    ) -> Optional[Dict[str, Any]]:
-        """Load individual function result from request directory."""
-        result = {}
-        
-        # Load metadata
-        metadata_file = func_dir / "metadata.json"
-        if metadata_file.exists():
-            with open(metadata_file, 'r', encoding='utf-8') as f:
-                result['metadata'] = json.load(f)
-        
-        # Load postconditions
-        postconditions_file = func_dir / "postconditions.json"
-        if postconditions_file.exists():
-            with open(postconditions_file, 'r', encoding='utf-8') as f:
-                pc_data = json.load(f)
-                result['postconditions'] = [
-                    EnhancedPostcondition(**pc) for pc in pc_data
-                ]
-        
-        return result if result else None
-    
-    def list_requests(self) -> List[str]:
-        """
-        List all stored request IDs.
-        
-        Returns:
-            List of request ID strings
-        """
-        if not self.requests_dir.exists():
-            return []
-        
-        return [
-            d.name for d in self.requests_dir.iterdir()
-            if d.is_dir()
-        ]
-    
-    # =========================================================================
-    # FUNCTION-CENTRIC STORAGE (🆕 NEW)
-    # =========================================================================
-    
-    def save_function_results(
-        self,
-        function_name: str,
-        request_id: str,
-        postconditions: List[EnhancedPostcondition],
-        z3_translations: Optional[List[Z3Translation]] = None,
-        function_signature: str = "",
-        function_description: str = ""
-    ) -> Path:
-        """
-        Save results organized by function name.
-        
-        Args:
-            function_name: Name of the function
-            request_id: Request that generated these results
-            postconditions: List of generated postconditions
-            z3_translations: Optional list of Z3 translations
-            function_signature: Function signature for metadata
-            function_description: Function description for metadata
-            
-        Returns:
-            Path to the function directory
-        """
-        # Sanitize function name for filesystem
-        safe_function_name = self._sanitize_filename(function_name)
-        func_dir = self.functions_dir / safe_function_name
-        func_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Update function metadata
-        self._update_function_metadata(
-            func_dir,
-            function_name,
-            function_signature,
-            function_description
+        # Save full session data
+        self._save_session_snapshot(
+            session_id=session_id,
+            specification=specification,
+            function_results=function_results,
+            total_time=total_time
         )
         
-        # Save postconditions
-        if postconditions:
-            pc_dir = func_dir / "postconditions"
-            pc_dir.mkdir(exist_ok=True)
-            
-            pc_file = pc_dir / f"{request_id}.json"
-            pc_data = [pc.model_dump() for pc in postconditions]
-            
-            with open(pc_file, 'w', encoding='utf-8') as f:
-                json.dump(pc_data, f, indent=2)
-            
-            logger.info(
-                f"Saved {len(postconditions)} postconditions for "
-                f"{function_name} (request: {request_id})"
+        # Save/update per-function metadata
+        for func_result in function_results:
+            self._save_function_metadata(
+                session_id=session_id,
+                specification=specification,
+                function_result=func_result
             )
         
-        # Save Z3 translations
-        if z3_translations:
-            z3_dir = func_dir / "z3_translations"
-            z3_dir.mkdir(exist_ok=True)
-            
-            z3_file = z3_dir / f"{request_id}.json"
-            z3_data = [z3.model_dump() for z3 in z3_translations]
-            
-            with open(z3_file, 'w', encoding='utf-8') as f:
-                json.dump(z3_data, f, indent=2)
-            
-            logger.info(
-                f"Saved {len(z3_translations)} Z3 translations for "
-                f"{function_name} (request: {request_id})"
-            )
-        
-        return func_dir
+        logger.info(f"Pipeline result saved successfully")
     
-    def _update_function_metadata(
+    def _save_session_snapshot(
         self,
-        func_dir: Path,
-        function_name: str,
-        function_signature: str,
-        function_description: str
-    ):
-        """Update or create function metadata file with comprehensive stats."""
-        metadata_file = func_dir / "metadata.json"
+        session_id: str,
+        specification: str,
+        function_results: List[FunctionResult],
+        total_time: float
+    ) -> None:
+        """Save complete session snapshot."""
+        session_file = self.sessions_dir / f"{session_id}.json"
         
-        # Load existing metadata or create new
+        session_data = {
+            "session_id": session_id,
+            "timestamp": datetime.now().isoformat(),
+            "specification": specification,
+            "total_functions": len(function_results),
+            "total_time": total_time,
+            "functions": []
+        }
+        
+        # Add function results
+        for func_result in function_results:
+            func_data = self._serialize_function_result(func_result, session_id)
+            session_data["functions"].append(func_data)
+        
+        # Calculate aggregates
+        session_data["aggregate_metrics"] = self._calculate_session_aggregates(
+            function_results
+        )
+        
+        with open(session_file, 'w') as f:
+            json.dump(session_data, f, indent=2)
+        
+        logger.info(f"Session snapshot saved: {session_file}")
+    
+    def _save_function_metadata(
+        self,
+        session_id: str,
+        specification: str,
+        function_result: FunctionResult
+    ) -> None:
+        """Save/update comprehensive function metadata."""
+        func_name = function_result.function_name
+        metadata_file = self.functions_dir / f"{func_name}.json"
+        
+        # Load existing or create new
         if metadata_file.exists():
-            with open(metadata_file, 'r', encoding='utf-8') as f:
-                metadata = json.load(f)
+            with open(metadata_file, 'r') as f:
+                data = json.load(f)
+                metadata = self._dict_to_metadata(data)
         else:
-            metadata = {
-                "function_name": function_name,
-                "function_signature": function_signature,
-                "function_description": function_description,
-                "first_seen": datetime.now().isoformat(),
-                "total_generations": 0,
-                "total_postconditions": 0,
-                "total_z3_translations": 0,
-                "generations_history": []
-            }
-        
-        # Update basic metadata
-        metadata["last_updated"] = datetime.now().isoformat()
-        metadata["total_generations"] = metadata.get("total_generations", 0) + 1
-        
-        # Update signature/description if provided
-        if function_signature:
-            metadata["function_signature"] = function_signature
-        if function_description:
-            metadata["function_description"] = function_description
-        
-        # Calculate statistics from stored files
-        pc_dir = func_dir / "postconditions"
-        z3_dir = func_dir / "z3_translations"
-        
-        total_pcs = 0
-        total_z3 = 0
-        history = []
-        
-        if pc_dir.exists():
-            for pc_file in pc_dir.glob("*.json"):
-                request_id = pc_file.stem
-                try:
-                    with open(pc_file, 'r', encoding='utf-8') as f:
-                        pcs = json.load(f)
-                        pc_count = len(pcs)
-                        total_pcs += pc_count
-                        
-                        # Get Z3 count for this request
-                        z3_file = z3_dir / f"{request_id}.json" if z3_dir.exists() else None
-                        z3_count = 0
-                        if z3_file and z3_file.exists():
-                            with open(z3_file, 'r', encoding='utf-8') as zf:
-                                z3s = json.load(zf)
-                                z3_count = len(z3s)
-                                total_z3 += z3_count
-                        
-                        # Add to history
-                        history.append({
-                            "request_id": request_id,
-                            "postcondition_count": pc_count,
-                            "z3_translation_count": z3_count,
-                            "generated_at": pc_file.stat().st_mtime
-                        })
-                except Exception as e:
-                    logger.error(f"Error reading {pc_file}: {e}")
-        
-        # Update statistics
-        metadata["total_postconditions"] = total_pcs
-        metadata["total_z3_translations"] = total_z3
-        metadata["generations_history"] = sorted(history, key=lambda x: x["generated_at"], reverse=True)
-        
-        # Save updated metadata
-        with open(metadata_file, 'w', encoding='utf-8') as f:
-            json.dump(metadata, f, indent=2)
-    
-    def load_function_postconditions(
-        self,
-        function_name: str,
-        request_id: Optional[str] = None
-    ) -> Dict[str, List[EnhancedPostcondition]]:
-        """
-        Load postconditions for a function.
-        
-        Args:
-            function_name: Name of the function
-            request_id: Optional specific request ID to load
-            
-        Returns:
-            Dict mapping request_id -> List[EnhancedPostcondition]
-            If request_id specified, returns single-item dict
-        """
-        safe_function_name = self._sanitize_filename(function_name)
-        pc_dir = self.functions_dir / safe_function_name / "postconditions"
-        
-        if not pc_dir.exists():
-            logger.warning(f"No postconditions found for function: {function_name}")
-            return {}
-        
-        results = {}
-        
-        # Load specific request or all requests
-        if request_id:
-            json_files = [pc_dir / f"{request_id}.json"]
-        else:
-            json_files = list(pc_dir.glob("*.json"))
-        
-        for json_file in json_files:
-            if not json_file.exists():
-                continue
-            
-            req_id = json_file.stem
-            
-            try:
-                with open(json_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                
-                postconditions = [
-                    EnhancedPostcondition(**pc) for pc in data
-                ]
-                results[req_id] = postconditions
-                
-            except Exception as e:
-                logger.error(
-                    f"Failed to load postconditions from {json_file}: {e}"
-                )
-        
-        return results
-    
-    def load_function_z3_translations(
-        self,
-        function_name: str,
-        request_id: Optional[str] = None
-    ) -> Dict[str, List[Z3Translation]]:
-        """
-        Load Z3 translations for a function.
-        
-        Args:
-            function_name: Name of the function
-            request_id: Optional specific request ID to load
-            
-        Returns:
-            Dict mapping request_id -> List[Z3Translation]
-            If request_id specified, returns single-item dict
-        """
-        safe_function_name = self._sanitize_filename(function_name)
-        z3_dir = self.functions_dir / safe_function_name / "z3_translations"
-        
-        if not z3_dir.exists():
-            logger.warning(
-                f"No Z3 translations found for function: {function_name}"
+            metadata = ComprehensiveFunctionMetadata(
+                function_name=func_name,
+                function_signature=function_result.function_signature,
+                function_description=function_result.function_description,
+                first_seen=datetime.now().isoformat(),
+                last_updated=datetime.now().isoformat()
             )
-            return {}
         
-        results = {}
+        # Create generation snapshot
+        snapshot = self._create_generation_snapshot(
+            session_id=session_id,
+            specification=specification,
+            function_result=function_result
+        )
         
-        # Load specific request or all requests
-        if request_id:
-            json_files = [z3_dir / f"{request_id}.json"]
-        else:
-            json_files = list(z3_dir.glob("*.json"))
+        # Add to metadata
+        metadata.add_generation(snapshot)
         
-        for json_file in json_files:
-            if not json_file.exists():
-                continue
-            
-            req_id = json_file.stem
-            
-            try:
-                with open(json_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                
-                translations = [
-                    Z3Translation(**z3) for z3 in data
-                ]
-                results[req_id] = translations
-                
-            except Exception as e:
-                logger.error(
-                    f"Failed to load Z3 translations from {json_file}: {e}"
-                )
+        # Save
+        with open(metadata_file, 'w') as f:
+            json.dump(metadata.to_dict(), f, indent=2)
         
-        return results
+        logger.info(f"Function metadata updated: {metadata_file}")
     
-    def load_function_metadata(self, function_name: str) -> Optional[Dict[str, Any]]:
-        """
-        Load metadata for a specific function.
+    def _create_generation_snapshot(
+        self,
+        session_id: str,
+        specification: str,
+        function_result: FunctionResult
+    ) -> GenerationSnapshot:
+        """Create comprehensive snapshot of generation run."""
+        # Convert postconditions
+        stored_postconditions = [
+            convert_postcondition_to_dict(pc, session_id)
+            for pc in function_result.postconditions
+        ]
         
-        Args:
-            function_name: Name of the function
+        # Calculate metrics
+        avg_confidence = 0.0
+        avg_robustness = 0.0
+        avg_quality = 0.0
+        
+        if function_result.postconditions:
+            avg_confidence = sum(
+                pc.confidence_score for pc in function_result.postconditions
+            ) / len(function_result.postconditions)
             
-        Returns:
-            Dictionary containing function metadata or None if not found
-        """
-        safe_function_name = self._sanitize_filename(function_name)
-        metadata_file = self.functions_dir / safe_function_name / "metadata.json"
+            avg_robustness = sum(
+                getattr(pc, 'robustness_score', 0.0) 
+                for pc in function_result.postconditions
+            ) / len(function_result.postconditions)
+            
+            avg_quality = sum(
+                getattr(pc, 'overall_quality_score', 0.0)
+                for pc in function_result.postconditions
+            ) / len(function_result.postconditions)
+        
+        # Collect edge cases
+        unique_edge_cases = set()
+        coverage_gaps = set()
+        
+        for pc in function_result.postconditions:
+            if hasattr(pc, 'edge_cases_covered'):
+                unique_edge_cases.update(pc.edge_cases_covered)
+            if hasattr(pc, 'coverage_gaps'):
+                coverage_gaps.update(pc.coverage_gaps)
+        
+        # Z3 analysis
+        z3_theories = set()
+        z3_validations_passed = 0
+        z3_validations_failed = 0
+        z3_errors = []
+        
+        for pc in function_result.postconditions:
+            if hasattr(pc, 'z3_theory'):
+                z3_theories.add(pc.z3_theory)
+            
+            if hasattr(pc, 'z3_translation') and pc.z3_translation:
+                if getattr(pc.z3_translation, 'z3_validation_passed', False):
+                    z3_validations_passed += 1
+                else:
+                    z3_validations_failed += 1
+                    error = getattr(pc.z3_translation, 'validation_error', None)
+                    if error:
+                        z3_errors.append(error)
+        
+        return GenerationSnapshot(
+            session_id=session_id,
+            timestamp=datetime.now().isoformat(),
+            specification=specification,
+            function_signature=function_result.function_signature,
+            function_description=function_result.function_description,
+            function_body=getattr(function_result.pseudocode, 'body', None) if hasattr(function_result, 'pseudocode') else None,
+            postconditions=stored_postconditions,
+            total_postconditions=len(function_result.postconditions),
+            average_confidence=avg_confidence,
+            average_robustness=avg_robustness,
+            average_quality=avg_quality,
+            total_edge_cases_covered=len(unique_edge_cases),
+            unique_edge_cases=list(unique_edge_cases),
+            coverage_gaps_found=list(coverage_gaps),
+            z3_translations_generated=len(function_result.postconditions),
+            z3_validations_passed=z3_validations_passed,
+            z3_validations_failed=z3_validations_failed,
+            z3_validation_errors=z3_errors,
+            z3_theories_used=list(z3_theories),
+            generation_time=getattr(function_result, 'processing_time', 0.0),
+            total_time=getattr(function_result, 'processing_time', 0.0),
+            status=str(getattr(function_result, 'status', 'success'))
+        )
+    
+    def _serialize_function_result(
+        self,
+        function_result: FunctionResult,
+        session_id: str
+    ) -> Dict[str, Any]:
+        """Serialize function result to dictionary."""
+        postconditions_data = [
+            convert_postcondition_to_dict(pc, session_id)
+            for pc in function_result.postconditions
+        ]
+        
+        return {
+            "function_name": function_result.function_name,
+            "function_signature": function_result.function_signature,
+            "function_description": function_result.function_description,
+            "postconditions": postconditions_data,
+            "postcondition_count": len(postconditions_data),
+            "average_quality_score": getattr(function_result, 'average_quality_score', 0.0),
+            "average_robustness_score": getattr(function_result, 'average_robustness_score', 0.0),
+            "z3_translations_count": getattr(function_result, 'z3_translations_count', 0),
+            "z3_validations_passed": getattr(function_result, 'z3_validations_passed', 0),
+            "z3_validations_failed": getattr(function_result, 'z3_validations_failed', 0),
+            "status": str(getattr(function_result, 'status', 'success')),
+            "processing_time": getattr(function_result, 'processing_time', 0.0)
+        }
+    
+    def _calculate_session_aggregates(
+        self,
+        function_results: List[FunctionResult]
+    ) -> Dict[str, Any]:
+        """Calculate session-level aggregates."""
+        total_postconditions = sum(len(fr.postconditions) for fr in function_results)
+        total_z3_translations = 0
+        total_validations_passed = 0
+        all_quality_scores = []
+        all_robustness_scores = []
+        
+        for func_result in function_results:
+            for pc in func_result.postconditions:
+                if hasattr(pc, 'overall_quality_score'):
+                    all_quality_scores.append(pc.overall_quality_score)
+                if hasattr(pc, 'robustness_score'):
+                    all_robustness_scores.append(pc.robustness_score)
+                
+                if hasattr(pc, 'z3_translation') and pc.z3_translation:
+                    total_z3_translations += 1
+                    if getattr(pc.z3_translation, 'z3_validation_passed', False):
+                        total_validations_passed += 1
+        
+        return {
+            "total_postconditions": total_postconditions,
+            "total_z3_translations": total_z3_translations,
+            "z3_validation_success_rate": (
+                total_validations_passed / total_z3_translations 
+                if total_z3_translations > 0 else 0.0
+            ),
+            "average_quality_score": (
+                sum(all_quality_scores) / len(all_quality_scores)
+                if all_quality_scores else 0.0
+            ),
+            "average_robustness_score": (
+                sum(all_robustness_scores) / len(all_robustness_scores)
+                if all_robustness_scores else 0.0
+            )
+        }
+    
+    def _dict_to_metadata(self, data: Dict[str, Any]) -> ComprehensiveFunctionMetadata:
+        """Convert dictionary to metadata object."""
+        return ComprehensiveFunctionMetadata(
+            function_name=data["function_name"],
+            function_signature=data["function_signature"],
+            function_description=data["function_description"],
+            first_seen=data["first_seen"],
+            last_updated=data["last_updated"],
+            total_generations=data.get("total_generations", 0),
+            generations_history=data.get("generations_history", []),
+            total_postconditions_ever_generated=data.get("total_postconditions_ever_generated", 0),
+            unique_postconditions_count=data.get("unique_postconditions_count", 0),
+            current_postconditions=data.get("current_postconditions", []),
+            quality_trend=data.get("quality_trend", []),
+            robustness_trend=data.get("robustness_trend", []),
+            confidence_trend=data.get("confidence_trend", []),
+            total_z3_translations=data.get("total_z3_translations", 0),
+            total_z3_validations_passed=data.get("total_z3_validations_passed", 0),
+            total_z3_validations_failed=data.get("total_z3_validations_failed", 0),
+            z3_theories_encountered=data.get("z3_theories_encountered", []),
+            all_edge_cases_covered=data.get("all_edge_cases_covered", []),
+            recurring_coverage_gaps=data.get("recurring_coverage_gaps", []),
+            edge_case_coverage_improvement=data.get("edge_case_coverage_improvement", 0.0),
+            average_generation_time=data.get("average_generation_time", 0.0),
+            fastest_generation_time=data.get("fastest_generation_time", 0.0),
+            slowest_generation_time=data.get("slowest_generation_time", 0.0),
+            best_generation_session_id=data.get("best_generation_session_id"),
+            best_generation_quality_score=data.get("best_generation_quality_score", 0.0),
+            status=data.get("status", "active"),
+            last_error=data.get("last_error"),
+            warnings_count=data.get("warnings_count", 0)
+        )
+    
+    # Query methods
+    def get_function_metadata(self, function_name: str) -> Optional[ComprehensiveFunctionMetadata]:
+        """Retrieve comprehensive metadata for a function."""
+        metadata_file = self.functions_dir / f"{function_name}.json"
         
         if not metadata_file.exists():
-            logger.warning(f"No metadata found for function: {function_name}")
             return None
         
-        try:
-            with open(metadata_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            logger.error(f"Failed to load metadata for {function_name}: {e}")
+        with open(metadata_file, 'r') as f:
+            data = json.load(f)
+            return self._dict_to_metadata(data)
+    
+    def get_session_data(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve full session snapshot."""
+        session_file = self.sessions_dir / f"{session_id}.json"
+        
+        if not session_file.exists():
             return None
+        
+        with open(session_file, 'r') as f:
+            return json.load(f)
     
     def list_all_functions(self) -> List[str]:
-        """
-        Get list of all function names with stored results.
-        
-        Returns:
-            List of function names
-        """
-        if not self.functions_dir.exists():
-            return []
-        
-        functions = []
-        for func_dir in self.functions_dir.iterdir():
-            if func_dir.is_dir() and not func_dir.name.startswith('.'):
-                # Try to get original function name from metadata
-                metadata = self.load_function_metadata(func_dir.name)
-                if metadata and 'function_name' in metadata:
-                    functions.append(metadata['function_name'])
-                else:
-                    functions.append(func_dir.name)
-        
-        return sorted(functions)
+        """List all functions with stored metadata."""
+        return [f.stem for f in self.functions_dir.glob("*.json")]
     
-    def get_function_summary(self, function_name: str) -> Dict[str, Any]:
-        """
-        Get summary statistics for a function.
-        
-        Args:
-            function_name: Name of the function
-            
-        Returns:
-            Dictionary with summary statistics
-        """
-        metadata = self.load_function_metadata(function_name)
-        postconditions_by_request = self.load_function_postconditions(function_name)
-        z3_by_request = self.load_function_z3_translations(function_name)
-        
-        # Calculate statistics
-        total_postconditions = sum(
-            len(pcs) for pcs in postconditions_by_request.values()
-        )
-        
-        return {
-            "function_name": function_name,
-            "metadata": metadata,
-            "total_generations": len(postconditions_by_request),
-            "total_postconditions": total_postconditions,
-            "total_z3_translations": sum(
-                len(z3s) for z3s in z3_by_request.values()
-            ),
-            "request_ids": list(postconditions_by_request.keys()),
-        }
-    
-    # =========================================================================
-    # UTILITY METHODS
-    # =========================================================================
-    
-    @staticmethod
-    def _sanitize_filename(name: str) -> str:
-        """
-        Sanitize function name for use as directory name.
-        
-        Args:
-            name: Original function name
-            
-        Returns:
-            Sanitized filename-safe string
-        """
-        # Replace invalid characters with underscores
-        invalid_chars = '<>:"/\\|?*'
-        sanitized = name
-        for char in invalid_chars:
-            sanitized = sanitized.replace(char, '_')
-        
-        # Remove leading/trailing spaces and dots
-        sanitized = sanitized.strip('. ')
-        
-        # Limit length
-        max_length = 200
-        if len(sanitized) > max_length:
-            sanitized = sanitized[:max_length]
-        
-        return sanitized
-    
-    def get_storage_stats(self) -> Dict[str, Any]:
-        """
-        Get overall storage statistics.
-        
-        Returns:
-            Dictionary with storage statistics
-        """
-        return {
-            "output_directory": str(self.output_dir),
-            "total_requests": len(self.list_requests()),
-            "total_functions": len(self.list_all_functions()),
-            "storage_size_bytes": self._get_directory_size(self.output_dir),
-        }
-    
-    @staticmethod
-    def _get_directory_size(directory: Path) -> int:
-        """Calculate total size of directory in bytes."""
-        total = 0
-        try:
-            for entry in directory.rglob('*'):
-                if entry.is_file():
-                    total += entry.stat().st_size
-        except Exception as e:
-            logger.error(f"Error calculating directory size: {e}")
-        return total
-
-
-# Convenience function for creating storage instance
-def create_storage(output_dir: str = "outputs") -> ResultStorage:
-    """
-    Create a ResultStorage instance.
-    
-    Args:
-        output_dir: Base directory for storing results
-        
-    Returns:
-        Configured ResultStorage instance
-    """
-    return ResultStorage(Path(output_dir))
+    def list_all_sessions(self) -> List[str]:
+        """List all stored session IDs."""
+        return [f.stem for f in self.sessions_dir.glob("*.json")]
