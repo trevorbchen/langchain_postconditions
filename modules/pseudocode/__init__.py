@@ -6,20 +6,17 @@ natural language specifications.
 
 Main components:
 - PseudocodeGenerator: Main class for generating pseudocode
-- generate_pseudocode: Convenience function for quick generation
-- generate_pseudocode_batch: Batch processing function
+- generate_pseudocode_api: Backward compatible API function
 """
 
 from modules.pseudocode.pseudocode_generator import (
     PseudocodeGenerator,
-    generate_pseudocode,
-    generate_pseudocode_batch
+    generate_pseudocode_api
 )
 
 __all__ = [
     'PseudocodeGenerator',
-    'generate_pseudocode',
-    'generate_pseudocode_batch',
+    'generate_pseudocode_api',
 ]
 
 __version__ = '2.0.0'

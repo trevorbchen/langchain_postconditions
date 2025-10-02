@@ -1,384 +1,603 @@
 """
-Unified Database Manager
+Storage module for postcondition generation results.
 
-This module consolidates all database operations that were previously
-scattered throughout the codebase.
-
-Key improvements:
-- Single database connection manager
-- Type-safe queries using Pydantic models
-- Automatic result parsing
-- Connection pooling
-- Context manager support
-
-Replaces: Scattered SQLite queries throughout old codebase
+Provides dual storage:
+1. Request-centric: outputs/requests/{request_id}/
+2. Function-centric: outputs/functions/{function_name}/
 """
 
-from typing import Optional, List, Dict, Any
+import json
+import logging
 from pathlib import Path
-import sqlite3
-from contextlib import contextmanager
+from typing import List, Dict, Optional, Any
+from datetime import datetime
 
-from config.settings import settings
-from core.models import CompleteEnhancedResult, Function
+from core.models import (
+    CompleteEnhancedResult,
+    FunctionResult,
+    EnhancedPostcondition,
+    Z3Translation,
+    Function
+)
+
+logger = logging.getLogger(__name__)
 
 
-class DatabaseManager:
-    """
-    Unified database manager for all database operations.
+class ResultStorage:
+    """Handles storage and retrieval of postcondition generation results."""
     
-    Handles connections to:
-    - context.db: Domain knowledge and patterns
-    - z3_theories.db: Z3 theory examples
-    - results.db: Pipeline execution results
-    
-    Example:
-        >>> db = DatabaseManager()
-        >>> with db.get_connection('context') as conn:
-        ...     knowledge = db.query_domain_knowledge(conn, 'sorting')
-    """
-    
-    def __init__(self):
-        """Initialize database connections."""
-        self.context_db_path = settings.context_db
-        self.z3_db_path = settings.z3_theories_db
-        self.results_db_path = getattr(settings, 'results_db', Path('results.db'))
-    
-    @contextmanager
-    def get_connection(self, db_name: str = 'context'):
+    def __init__(self, output_dir: Path):
         """
-        Get a database connection with automatic cleanup.
+        Initialize storage with output directory.
         
         Args:
-            db_name: Which database ('context', 'z3', 'results')
-            
-        Yields:
-            sqlite3.Connection
-            
-        Example:
-            >>> with db.get_connection('context') as conn:
-            ...     cursor = conn.cursor()
-            ...     cursor.execute("SELECT * FROM domains")
+            output_dir: Base directory for storing results
         """
-        if db_name == 'context':
-            db_path = self.context_db_path
-        elif db_name == 'z3':
-            db_path = self.z3_db_path
-        elif db_name == 'results':
-            db_path = self.results_db_path
-        else:
-            raise ValueError(f"Unknown database: {db_name}")
+        self.output_dir = Path(output_dir)
+        self.requests_dir = self.output_dir / "requests"
+        self.functions_dir = self.output_dir / "functions"  # 🆕 NEW
         
-        conn = sqlite3.connect(str(db_path))
-        conn.row_factory = sqlite3.Row  # Access columns by name
+        # Create directories
+        self.requests_dir.mkdir(parents=True, exist_ok=True)
+        self.functions_dir.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Storage initialized: {self.output_dir}")
+    
+    # =========================================================================
+    # REQUEST-CENTRIC STORAGE (Existing - Backward Compatible)
+    # =========================================================================
+    
+    def save_results(self, request_id: str, result: CompleteEnhancedResult) -> Path:
+        """
+        Save results organized by request ID (backward compatible).
+        
+        Args:
+            request_id: Unique request identifier
+            result: Pipeline result containing all function results
+            
+        Returns:
+            Path to the saved request directory
+        """
+        request_dir = self.requests_dir / request_id
+        request_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save metadata
+        metadata = {
+            "request_id": request_id,
+            "session_id": result.session_id,
+            "timestamp": result.started_at,
+            "specification": result.specification,
+            "function_count": len(result.function_results),
+            "total_postconditions": result.total_postconditions,
+            "status": result.status.value,
+            "errors": result.errors,
+            "warnings": result.warnings,
+        }
+        
+        metadata_file = request_dir / "metadata.json"
+        with open(metadata_file, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, indent=2)
+        
+        # Save each function's results
+        for func_result in result.function_results:
+            self._save_function_result_to_request(request_dir, func_result)
+        
+        logger.info(f"Saved results to {request_dir}")
+        return request_dir
+    
+    def _save_function_result_to_request(
+        self,
+        request_dir: Path,
+        func_result: FunctionResult
+    ):
+        """Save individual function result to request directory."""
+        func_dir = request_dir / func_result.function_name
+        func_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save postconditions
+        if func_result.postconditions:
+            postconditions_file = func_dir / "postconditions.json"
+            postconditions_data = [
+                pc.model_dump() for pc in func_result.postconditions
+            ]
+            with open(postconditions_file, 'w', encoding='utf-8') as f:
+                json.dump(postconditions_data, f, indent=2)
+        
+        # Save function metadata
+        func_metadata = {
+            "function_name": func_result.function_name,
+            "function_signature": func_result.function_signature,
+            "function_description": func_result.function_description,
+            "postcondition_count": func_result.postcondition_count,
+            "z3_translations_count": func_result.z3_translations_count,
+            "status": func_result.status.value,
+        }
+        
+        metadata_file = func_dir / "metadata.json"
+        with open(metadata_file, 'w', encoding='utf-8') as f:
+            json.dump(func_metadata, f, indent=2)
+    
+    def load_results(self, request_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Load results for a specific request ID.
+        
+        Args:
+            request_id: Request identifier
+            
+        Returns:
+            Dictionary containing request results or None if not found
+        """
+        request_dir = self.requests_dir / request_id
+        
+        if not request_dir.exists():
+            logger.warning(f"Request directory not found: {request_dir}")
+            return None
+        
+        # Load metadata
+        metadata_file = request_dir / "metadata.json"
+        if not metadata_file.exists():
+            logger.warning(f"Metadata file not found: {metadata_file}")
+            return None
+        
+        with open(metadata_file, 'r', encoding='utf-8') as f:
+            metadata = json.load(f)
+        
+        # Load function results
+        function_results = {}
+        for func_dir in request_dir.iterdir():
+            if func_dir.is_dir():
+                func_data = self._load_function_result_from_request(func_dir)
+                if func_data:
+                    function_results[func_dir.name] = func_data
+        
+        metadata['function_results'] = function_results
+        return metadata
+    
+    def _load_function_result_from_request(
+        self,
+        func_dir: Path
+    ) -> Optional[Dict[str, Any]]:
+        """Load individual function result from request directory."""
+        result = {}
+        
+        # Load metadata
+        metadata_file = func_dir / "metadata.json"
+        if metadata_file.exists():
+            with open(metadata_file, 'r', encoding='utf-8') as f:
+                result['metadata'] = json.load(f)
+        
+        # Load postconditions
+        postconditions_file = func_dir / "postconditions.json"
+        if postconditions_file.exists():
+            with open(postconditions_file, 'r', encoding='utf-8') as f:
+                pc_data = json.load(f)
+                result['postconditions'] = [
+                    EnhancedPostcondition(**pc) for pc in pc_data
+                ]
+        
+        return result if result else None
+    
+    def list_requests(self) -> List[str]:
+        """
+        List all stored request IDs.
+        
+        Returns:
+            List of request ID strings
+        """
+        if not self.requests_dir.exists():
+            return []
+        
+        return [
+            d.name for d in self.requests_dir.iterdir()
+            if d.is_dir()
+        ]
+    
+    # =========================================================================
+    # FUNCTION-CENTRIC STORAGE (🆕 NEW)
+    # =========================================================================
+    
+    def save_function_results(
+        self,
+        function_name: str,
+        request_id: str,
+        postconditions: List[EnhancedPostcondition],
+        z3_translations: Optional[List[Z3Translation]] = None,
+        function_signature: str = "",
+        function_description: str = ""
+    ) -> Path:
+        """
+        Save results organized by function name.
+        
+        Args:
+            function_name: Name of the function
+            request_id: Request that generated these results
+            postconditions: List of generated postconditions
+            z3_translations: Optional list of Z3 translations
+            function_signature: Function signature for metadata
+            function_description: Function description for metadata
+            
+        Returns:
+            Path to the function directory
+        """
+        # Sanitize function name for filesystem
+        safe_function_name = self._sanitize_filename(function_name)
+        func_dir = self.functions_dir / safe_function_name
+        func_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Update function metadata
+        self._update_function_metadata(
+            func_dir,
+            function_name,
+            function_signature,
+            function_description
+        )
+        
+        # Save postconditions
+        if postconditions:
+            pc_dir = func_dir / "postconditions"
+            pc_dir.mkdir(exist_ok=True)
+            
+            pc_file = pc_dir / f"{request_id}.json"
+            pc_data = [pc.model_dump() for pc in postconditions]
+            
+            with open(pc_file, 'w', encoding='utf-8') as f:
+                json.dump(pc_data, f, indent=2)
+            
+            logger.info(
+                f"Saved {len(postconditions)} postconditions for "
+                f"{function_name} (request: {request_id})"
+            )
+        
+        # Save Z3 translations
+        if z3_translations:
+            z3_dir = func_dir / "z3_translations"
+            z3_dir.mkdir(exist_ok=True)
+            
+            z3_file = z3_dir / f"{request_id}.json"
+            z3_data = [z3.model_dump() for z3 in z3_translations]
+            
+            with open(z3_file, 'w', encoding='utf-8') as f:
+                json.dump(z3_data, f, indent=2)
+            
+            logger.info(
+                f"Saved {len(z3_translations)} Z3 translations for "
+                f"{function_name} (request: {request_id})"
+            )
+        
+        return func_dir
+    
+    def _update_function_metadata(
+        self,
+        func_dir: Path,
+        function_name: str,
+        function_signature: str,
+        function_description: str
+    ):
+        """Update or create function metadata file with comprehensive stats."""
+        metadata_file = func_dir / "metadata.json"
+        
+        # Load existing metadata or create new
+        if metadata_file.exists():
+            with open(metadata_file, 'r', encoding='utf-8') as f:
+                metadata = json.load(f)
+        else:
+            metadata = {
+                "function_name": function_name,
+                "function_signature": function_signature,
+                "function_description": function_description,
+                "first_seen": datetime.now().isoformat(),
+                "total_generations": 0,
+                "total_postconditions": 0,
+                "total_z3_translations": 0,
+                "generations_history": []
+            }
+        
+        # Update basic metadata
+        metadata["last_updated"] = datetime.now().isoformat()
+        metadata["total_generations"] = metadata.get("total_generations", 0) + 1
+        
+        # Update signature/description if provided
+        if function_signature:
+            metadata["function_signature"] = function_signature
+        if function_description:
+            metadata["function_description"] = function_description
+        
+        # Calculate statistics from stored files
+        pc_dir = func_dir / "postconditions"
+        z3_dir = func_dir / "z3_translations"
+        
+        total_pcs = 0
+        total_z3 = 0
+        history = []
+        
+        if pc_dir.exists():
+            for pc_file in pc_dir.glob("*.json"):
+                request_id = pc_file.stem
+                try:
+                    with open(pc_file, 'r', encoding='utf-8') as f:
+                        pcs = json.load(f)
+                        pc_count = len(pcs)
+                        total_pcs += pc_count
+                        
+                        # Get Z3 count for this request
+                        z3_file = z3_dir / f"{request_id}.json" if z3_dir.exists() else None
+                        z3_count = 0
+                        if z3_file and z3_file.exists():
+                            with open(z3_file, 'r', encoding='utf-8') as zf:
+                                z3s = json.load(zf)
+                                z3_count = len(z3s)
+                                total_z3 += z3_count
+                        
+                        # Add to history
+                        history.append({
+                            "request_id": request_id,
+                            "postcondition_count": pc_count,
+                            "z3_translation_count": z3_count,
+                            "generated_at": pc_file.stat().st_mtime
+                        })
+                except Exception as e:
+                    logger.error(f"Error reading {pc_file}: {e}")
+        
+        # Update statistics
+        metadata["total_postconditions"] = total_pcs
+        metadata["total_z3_translations"] = total_z3
+        metadata["generations_history"] = sorted(history, key=lambda x: x["generated_at"], reverse=True)
+        
+        # Save updated metadata
+        with open(metadata_file, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, indent=2)
+    
+    def load_function_postconditions(
+        self,
+        function_name: str,
+        request_id: Optional[str] = None
+    ) -> Dict[str, List[EnhancedPostcondition]]:
+        """
+        Load postconditions for a function.
+        
+        Args:
+            function_name: Name of the function
+            request_id: Optional specific request ID to load
+            
+        Returns:
+            Dict mapping request_id -> List[EnhancedPostcondition]
+            If request_id specified, returns single-item dict
+        """
+        safe_function_name = self._sanitize_filename(function_name)
+        pc_dir = self.functions_dir / safe_function_name / "postconditions"
+        
+        if not pc_dir.exists():
+            logger.warning(f"No postconditions found for function: {function_name}")
+            return {}
+        
+        results = {}
+        
+        # Load specific request or all requests
+        if request_id:
+            json_files = [pc_dir / f"{request_id}.json"]
+        else:
+            json_files = list(pc_dir.glob("*.json"))
+        
+        for json_file in json_files:
+            if not json_file.exists():
+                continue
+            
+            req_id = json_file.stem
+            
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                postconditions = [
+                    EnhancedPostcondition(**pc) for pc in data
+                ]
+                results[req_id] = postconditions
+                
+            except Exception as e:
+                logger.error(
+                    f"Failed to load postconditions from {json_file}: {e}"
+                )
+        
+        return results
+    
+    def load_function_z3_translations(
+        self,
+        function_name: str,
+        request_id: Optional[str] = None
+    ) -> Dict[str, List[Z3Translation]]:
+        """
+        Load Z3 translations for a function.
+        
+        Args:
+            function_name: Name of the function
+            request_id: Optional specific request ID to load
+            
+        Returns:
+            Dict mapping request_id -> List[Z3Translation]
+            If request_id specified, returns single-item dict
+        """
+        safe_function_name = self._sanitize_filename(function_name)
+        z3_dir = self.functions_dir / safe_function_name / "z3_translations"
+        
+        if not z3_dir.exists():
+            logger.warning(
+                f"No Z3 translations found for function: {function_name}"
+            )
+            return {}
+        
+        results = {}
+        
+        # Load specific request or all requests
+        if request_id:
+            json_files = [z3_dir / f"{request_id}.json"]
+        else:
+            json_files = list(z3_dir.glob("*.json"))
+        
+        for json_file in json_files:
+            if not json_file.exists():
+                continue
+            
+            req_id = json_file.stem
+            
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                translations = [
+                    Z3Translation(**z3) for z3 in data
+                ]
+                results[req_id] = translations
+                
+            except Exception as e:
+                logger.error(
+                    f"Failed to load Z3 translations from {json_file}: {e}"
+                )
+        
+        return results
+    
+    def load_function_metadata(self, function_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Load metadata for a specific function.
+        
+        Args:
+            function_name: Name of the function
+            
+        Returns:
+            Dictionary containing function metadata or None if not found
+        """
+        safe_function_name = self._sanitize_filename(function_name)
+        metadata_file = self.functions_dir / safe_function_name / "metadata.json"
+        
+        if not metadata_file.exists():
+            logger.warning(f"No metadata found for function: {function_name}")
+            return None
         
         try:
-            yield conn
-            conn.commit()
+            with open(metadata_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
         except Exception as e:
-            conn.rollback()
-            raise e
-        finally:
-            conn.close()
-    
-    def query_domain_knowledge(
-        self,
-        domain: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Query domain knowledge from context database.
-        
-        Args:
-            domain: Specific domain to query (None = all domains)
-            
-        Returns:
-            List of domain knowledge dictionaries
-            
-        Example:
-            >>> db = DatabaseManager()
-            >>> sorting_knowledge = db.query_domain_knowledge('sorting')
-        """
-        with self.get_connection('context') as conn:
-            cursor = conn.cursor()
-            
-            if domain:
-                cursor.execute(
-                    "SELECT * FROM domain_contexts WHERE domain = ?",
-                    (domain,)
-                )
-            else:
-                cursor.execute("SELECT * FROM domain_contexts")
-            
-            rows = cursor.fetchall()
-            return [dict(row) for row in rows]
-    
-    def query_z3_theories(
-        self,
-        theory_type: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Query Z3 theory examples from database.
-        
-        Args:
-            theory_type: Specific theory type (e.g., 'arrays', 'arithmetic')
-            
-        Returns:
-            List of Z3 theory examples
-            
-        Example:
-            >>> db = DatabaseManager()
-            >>> array_theories = db.query_z3_theories('arrays')
-        """
-        with self.get_connection('z3') as conn:
-            cursor = conn.cursor()
-            
-            if theory_type:
-                cursor.execute(
-                    "SELECT * FROM theories WHERE theory_type = ?",
-                    (theory_type,)
-                )
-            else:
-                cursor.execute("SELECT * FROM theories")
-            
-            rows = cursor.fetchall()
-            return [dict(row) for row in rows]
-    
-    def save_pipeline_result(
-        self,
-        result: CompleteEnhancedResult
-    ) -> None:
-        """
-        Save pipeline execution result to database.
-        
-        Args:
-            result: CompleteEnhancedResult to save
-            
-        Example:
-            >>> db = DatabaseManager()
-            >>> db.save_pipeline_result(result)
-        """
-        with self.get_connection('results') as conn:
-            cursor = conn.cursor()
-            
-            # Create table if not exists
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS pipeline_results (
-                    session_id TEXT PRIMARY KEY,
-                    specification TEXT,
-                    status TEXT,
-                    total_functions INTEGER,
-                    total_postconditions INTEGER,
-                    successful_z3_translations INTEGER,
-                    processing_time REAL,
-                    generated_at TIMESTAMP,
-                    result_json TEXT
-                )
-            """)
-            
-            # Insert result
-            cursor.execute("""
-                INSERT OR REPLACE INTO pipeline_results
-                (session_id, specification, status, total_functions, 
-                 total_postconditions, successful_z3_translations,
-                 processing_time, generated_at, result_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                result.session_id,
-                result.specification,
-                result.overall_status.value,
-                len(result.function_results),
-                result.total_postconditions,
-                result.successful_z3_translations,
-                result.total_processing_time,
-                result.generated_at,
-                result.model_dump_json()
-            ))
-    
-    def load_pipeline_result(
-        self,
-        session_id: str
-    ) -> Optional[CompleteEnhancedResult]:
-        """
-        Load a pipeline result by session ID.
-        
-        Args:
-            session_id: Session identifier
-            
-        Returns:
-            CompleteEnhancedResult or None if not found
-            
-        Example:
-            >>> db = DatabaseManager()
-            >>> result = db.load_pipeline_result("session_123")
-        """
-        with self.get_connection('results') as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT result_json FROM pipeline_results WHERE session_id = ?",
-                (session_id,)
-            )
-            
-            row = cursor.fetchone()
-            if row:
-                return CompleteEnhancedResult.model_validate_json(row['result_json'])
+            logger.error(f"Failed to load metadata for {function_name}: {e}")
             return None
     
-    def list_recent_results(
-        self,
-        limit: int = 10
-    ) -> List[Dict[str, Any]]:
+    def list_all_functions(self) -> List[str]:
         """
-        List recent pipeline results.
+        Get list of all function names with stored results.
+        
+        Returns:
+            List of function names
+        """
+        if not self.functions_dir.exists():
+            return []
+        
+        functions = []
+        for func_dir in self.functions_dir.iterdir():
+            if func_dir.is_dir() and not func_dir.name.startswith('.'):
+                # Try to get original function name from metadata
+                metadata = self.load_function_metadata(func_dir.name)
+                if metadata and 'function_name' in metadata:
+                    functions.append(metadata['function_name'])
+                else:
+                    functions.append(func_dir.name)
+        
+        return sorted(functions)
+    
+    def get_function_summary(self, function_name: str) -> Dict[str, Any]:
+        """
+        Get summary statistics for a function.
         
         Args:
-            limit: Maximum number of results to return
+            function_name: Name of the function
             
         Returns:
-            List of result summaries
-            
-        Example:
-            >>> db = DatabaseManager()
-            >>> recent = db.list_recent_results(5)
-            >>> for r in recent:
-            ...     print(f"{r['session_id']}: {r['status']}")
+            Dictionary with summary statistics
         """
-        with self.get_connection('results') as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT session_id, specification, status, 
-                       total_postconditions, processing_time, generated_at
-                FROM pipeline_results
-                ORDER BY generated_at DESC
-                LIMIT ?
-            """, (limit,))
-            
-            rows = cursor.fetchall()
-            return [dict(row) for row in rows]
+        metadata = self.load_function_metadata(function_name)
+        postconditions_by_request = self.load_function_postconditions(function_name)
+        z3_by_request = self.load_function_z3_translations(function_name)
+        
+        # Calculate statistics
+        total_postconditions = sum(
+            len(pcs) for pcs in postconditions_by_request.values()
+        )
+        
+        return {
+            "function_name": function_name,
+            "metadata": metadata,
+            "total_generations": len(postconditions_by_request),
+            "total_postconditions": total_postconditions,
+            "total_z3_translations": sum(
+                len(z3s) for z3s in z3_by_request.values()
+            ),
+            "request_ids": list(postconditions_by_request.keys()),
+        }
     
-    def search_results(
-        self,
-        specification_query: str
-    ) -> List[Dict[str, Any]]:
+    # =========================================================================
+    # UTILITY METHODS
+    # =========================================================================
+    
+    @staticmethod
+    def _sanitize_filename(name: str) -> str:
         """
-        Search results by specification text.
+        Sanitize function name for use as directory name.
         
         Args:
-            specification_query: Text to search for
+            name: Original function name
             
         Returns:
-            List of matching results
-            
-        Example:
-            >>> db = DatabaseManager()
-            >>> results = db.search_results("sort")
+            Sanitized filename-safe string
         """
-        with self.get_connection('results') as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT session_id, specification, status, 
-                       total_postconditions, processing_time, generated_at
-                FROM pipeline_results
-                WHERE specification LIKE ?
-                ORDER BY generated_at DESC
-            """, (f"%{specification_query}%",))
-            
-            rows = cursor.fetchall()
-            return [dict(row) for row in rows]
+        # Replace invalid characters with underscores
+        invalid_chars = '<>:"/\\|?*'
+        sanitized = name
+        for char in invalid_chars:
+            sanitized = sanitized.replace(char, '_')
+        
+        # Remove leading/trailing spaces and dots
+        sanitized = sanitized.strip('. ')
+        
+        # Limit length
+        max_length = 200
+        if len(sanitized) > max_length:
+            sanitized = sanitized[:max_length]
+        
+        return sanitized
+    
+    def get_storage_stats(self) -> Dict[str, Any]:
+        """
+        Get overall storage statistics.
+        
+        Returns:
+            Dictionary with storage statistics
+        """
+        return {
+            "output_directory": str(self.output_dir),
+            "total_requests": len(self.list_requests()),
+            "total_functions": len(self.list_all_functions()),
+            "storage_size_bytes": self._get_directory_size(self.output_dir),
+        }
+    
+    @staticmethod
+    def _get_directory_size(directory: Path) -> int:
+        """Calculate total size of directory in bytes."""
+        total = 0
+        try:
+            for entry in directory.rglob('*'):
+                if entry.is_file():
+                    total += entry.stat().st_size
+        except Exception as e:
+            logger.error(f"Error calculating directory size: {e}")
+        return total
 
 
-# ============================================================================
-# CONVENIENCE FUNCTIONS
-# ============================================================================
-
-def get_domain_knowledge(domain: str) -> List[Dict[str, Any]]:
+# Convenience function for creating storage instance
+def create_storage(output_dir: str = "outputs") -> ResultStorage:
     """
-    Convenience function to get domain knowledge.
+    Create a ResultStorage instance.
     
     Args:
-        domain: Domain name (e.g., 'sorting', 'searching')
+        output_dir: Base directory for storing results
         
     Returns:
-        List of domain knowledge entries
+        Configured ResultStorage instance
     """
-    db = DatabaseManager()
-    return db.query_domain_knowledge(domain)
-
-
-def get_z3_theories(theory_type: str) -> List[Dict[str, Any]]:
-    """
-    Convenience function to get Z3 theories.
-    
-    Args:
-        theory_type: Theory type (e.g., 'arrays', 'arithmetic')
-        
-    Returns:
-        List of Z3 theory examples
-    """
-    db = DatabaseManager()
-    return db.query_z3_theories(theory_type)
-
-
-def save_result(result: CompleteEnhancedResult) -> None:
-    """
-    Convenience function to save a pipeline result.
-    
-    Args:
-        result: Result to save
-    """
-    db = DatabaseManager()
-    db.save_pipeline_result(result)
-
-
-# ============================================================================
-# EXAMPLE USAGE
-# ============================================================================
-
-if __name__ == "__main__":
-    print("=" * 70)
-    print("DATABASE MANAGER - EXAMPLE USAGE")
-    print("=" * 70)
-    
-    db = DatabaseManager()
-    
-    # Example 1: Query domain knowledge
-    print("\n📚 Example 1: Query domain knowledge")
-    print("-" * 70)
-    
-    try:
-        knowledge = db.query_domain_knowledge()
-        print(f"Found {len(knowledge)} domain knowledge entries")
-        if knowledge:
-            print(f"First entry: {list(knowledge[0].keys())}")
-    except Exception as e:
-        print(f"Note: {e}")
-        print("(This is normal if context.db doesn't exist yet)")
-    
-    # Example 2: List recent results
-    print("\n📋 Example 2: List recent results")
-    print("-" * 70)
-    
-    try:
-        recent = db.list_recent_results(5)
-        print(f"Found {len(recent)} recent results")
-        for r in recent:
-            print(f"  - {r['session_id']}: {r['status']}")
-    except Exception as e:
-        print(f"Note: {e}")
-        print("(This is normal if results.db doesn't exist yet)")
-    
-    # Example 3: Context manager usage
-    print("\n🔗 Example 3: Context manager usage")
-    print("-" * 70)
-    
-    try:
-        with db.get_connection('results') as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            tables = cursor.fetchall()
-            print(f"Tables: {[t['name'] for t in tables]}")
-    except Exception as e:
-        print(f"Note: {e}")
-    
-    print("\n" + "=" * 70)
-    print("✅ EXAMPLES COMPLETED")
-    print("=" * 70)
+    return ResultStorage(Path(output_dir))

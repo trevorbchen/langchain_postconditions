@@ -1,642 +1,649 @@
 """
-Enhanced Pipeline Orchestrator
+Pipeline for orchestrating postcondition generation workflow.
 
-🔴 FIXED VERSION - Added Missing Methods:
-✅ Added _save_pseudocode()
-✅ Added _save_postconditions_detailed()
-✅ Added _save_z3_code()
-✅ Added _save_validation_report()
-✅ Added _save_session_metadata()
-✅ Updated _compute_statistics() to calculate quality aggregates
+Handles the complete pipeline from specification to postconditions and Z3 translations,
+with dual storage (request-centric and function-centric).
 """
 
-from typing import Optional, List
-from pathlib import Path
-from datetime import datetime
+import logging
 import asyncio
-import uuid
-import sys
-import os
-import json
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+from pathlib import Path
 
-# Get the project root directory
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
-
-from core.chains import ChainFactory
 from core.models import (
     CompleteEnhancedResult,
     FunctionResult,
-    PseudocodeResult,
+    EnhancedPostcondition,
+    Z3Translation,
     Function,
     ProcessingStatus
 )
-from config.settings import settings
-import logging
+from core.chains import ChainFactory
+from modules.pseudocode.pseudocode_generator import PseudocodeGenerator
+from modules.z3.translator import Z3Translator
+from storage.database import ResultStorage
+from config.settings import Settings
 
 logger = logging.getLogger(__name__)
 
 
 class PostconditionPipeline:
-    """Unified pipeline for complete postcondition generation."""
+    """
+    Main pipeline for generating postconditions and Z3 translations.
+    
+    Workflow:
+    1. Parse specification into functions
+    2. Generate postconditions for each function
+    3. Translate postconditions to Z3 code
+    4. Save results to both request-centric and function-centric storage
+    """
     
     def __init__(
         self,
+        storage: Optional[ResultStorage] = None,
+        settings: Optional[Settings] = None,
+        streaming: bool = False,
         codebase_path: Optional[Path] = None,
         validate_z3: bool = True
     ):
-        self.factory = ChainFactory()
+        """
+        Initialize pipeline with dependencies.
+        
+        Args:
+            storage: Storage backend (creates default if None)
+            settings: Configuration settings (loads default if None)
+            streaming: Enable streaming responses from LLM
+            codebase_path: Optional path to existing codebase (for context)
+            validate_z3: Whether to validate Z3 translations
+        """
+        self.settings = settings or Settings()
+        # Default output directory if not specified
+        default_output_dir = Path("outputs")
+        self.storage = storage or ResultStorage(default_output_dir)
+        self.streaming = streaming
         self.codebase_path = codebase_path
         self.validate_z3 = validate_z3
+        
+        # Initialize chain factory (no streaming argument)
+        self.factory = ChainFactory()
+        
+        # Initialize components
+        self.pseudocode_generator = PseudocodeGenerator()
+        self.z3_translator = Z3Translator()
+        
+        logger.info("Pipeline initialized")
     
-    async def process(
+    async def run(
         self,
         specification: str,
+        functions: Optional[List[Function]] = None,
+        edge_cases: Optional[List[str]] = None,
+        generate_z3: bool = True,
         session_id: Optional[str] = None
     ) -> CompleteEnhancedResult:
-        """Process a specification through the complete pipeline."""
-        session_id = session_id or str(uuid.uuid4())
+        """
+        Run the complete postcondition generation pipeline.
         
+        Args:
+            specification: Natural language specification
+            functions: Pre-parsed functions (will parse from spec if None)
+            edge_cases: Optional list of edge cases to consider
+            generate_z3: Whether to generate Z3 translations
+            session_id: Optional session identifier
+            
+        Returns:
+            CompleteEnhancedResult containing all generated postconditions and translations
+        """
+        logger.info("Starting pipeline execution")
+        start_time = datetime.now()
+        
+        # Generate unique request ID
+        request_id = session_id or self._generate_request_id()
+        
+        # Initialize result
         result = CompleteEnhancedResult(
-            session_id=session_id,
+            session_id=request_id,
             specification=specification,
+            started_at=start_time.isoformat(),
             status=ProcessingStatus.IN_PROGRESS
         )
         
-        logger.info(f"Starting pipeline for session {session_id}")
-        
         try:
-            # Step 1: Generate pseudocode
-            logger.info("Step 1: Generating pseudocode...")
-            result.pseudocode_result = await self._generate_pseudocode(specification)
+            # Step 1: Parse or validate functions
+            if functions is None:
+                logger.info("Parsing specification into functions")
+                functions = await self._parse_specification(specification)
+                
+                if not functions:
+                    result.status = ProcessingStatus.FAILED
+                    result.errors.append("No functions found in specification")
+                    return result
             
-            if not result.pseudocode_result or not result.pseudocode_result.functions:
-                result.status = ProcessingStatus.FAILED
-                result.errors.append("No functions generated from pseudocode")
-                return result
+            logger.info(f"Processing {len(functions)} functions")
             
-            result.total_functions = len(result.pseudocode_result.functions)
-            logger.info(f"Generated {result.total_functions} functions")
-            
-            # Step 2: Generate postconditions
-            logger.info("Step 2: Generating postconditions...")
-            for function in result.pseudocode_result.functions:
-                func_result = await self._generate_postconditions_for_function(
-                    specification, function, result
+            # Step 2: Generate postconditions for each function
+            for function in functions:
+                func_result = await self._process_function(
+                    specification=specification,
+                    function=function,
+                    edge_cases=edge_cases,
+                    generate_z3=generate_z3
                 )
                 result.function_results.append(func_result)
             
-            # Step 3: Translate to Z3
-            if self.validate_z3:
-                logger.info("Step 3: Translating to Z3...")
-                await self._translate_all_to_z3(result.function_results)
-            
-            # Step 4: Compute statistics (including quality aggregates)
-            logger.info("Step 4: Computing statistics...")
-            self._compute_statistics(result)
-            
-            # Step 5: Generate validation report
-            logger.info("Step 5: Generating validation report...")
-            self._generate_validation_report(result)
+            # Step 3: Save results to storage (dual write)
+            await self._save_results(request_id, result)
             
             result.status = ProcessingStatus.SUCCESS
-            result.completed_at = datetime.now().isoformat()
-            
-            logger.info(f"Pipeline completed successfully")
             
         except Exception as e:
-            logger.error(f"Pipeline error: {e}", exc_info=True)
+            logger.error(f"Pipeline execution failed: {e}", exc_info=True)
             result.status = ProcessingStatus.FAILED
-            result.errors.append(str(e))
+            result.errors.append(f"Pipeline error: {str(e)}")
+        
+        # Calculate execution time
+        end_time = datetime.now()
+        result.total_processing_time = (end_time - start_time).total_seconds()
+        result.completed_at = end_time.isoformat()
+        
+        logger.info(
+            f"Pipeline completed in {result.total_processing_time:.2f}s "
+            f"({len(result.function_results)} functions processed)"
+        )
         
         return result
     
-    def process_sync(self, specification: str, session_id: Optional[str] = None) -> CompleteEnhancedResult:
-        """Synchronous wrapper for process()."""
-        return asyncio.run(self.process(specification, session_id))
-    
-    async def _generate_pseudocode(self, specification: str) -> PseudocodeResult:
-        """Generate pseudocode from specification."""
+    async def _parse_specification(
+        self,
+        specification: str
+    ) -> List[Function]:
+        """
+        Parse specification into pseudocode functions.
+        
+        Args:
+            specification: Natural language specification
+            
+        Returns:
+            List of parsed functions
+        """
         try:
-            return await self.factory.pseudocode.agenerate(specification)
+            # Use chain to extract functions
+            result = await self.factory.pseudocode.agenerate(specification)
+            
+            # Handle different return types from pseudocode chain
+            if hasattr(result, 'functions'):
+                # PseudocodeResult object with functions attribute
+                return result.functions
+            elif isinstance(result, tuple):
+                # If it's a tuple, take the first element (usually the data)
+                functions_data = result[0] if result else []
+            elif isinstance(result, dict):
+                # If it's a dict with 'functions' key
+                functions_data = result.get('functions', [])
+            elif isinstance(result, list):
+                # If it's already a list
+                functions_data = result
+            else:
+                logger.error(f"Unexpected pseudocode result type: {type(result)}")
+                return []
+            
+            # Ensure we have a list
+            if not isinstance(functions_data, list):
+                functions_data = [functions_data]
+            
+            # Convert to Function objects
+            functions = []
+            for func_data in functions_data:
+                # Handle both dict and object types
+                if isinstance(func_data, dict):
+                    function = Function(
+                        name=func_data.get("name", "unknown"),
+                        signature=func_data.get("signature", ""),
+                        description=func_data.get("description", ""),
+                        body=func_data.get("body", ""),
+                        input_parameters=func_data.get("input_parameters", []),
+                        return_type=func_data.get("return_type", "")
+                    )
+                    functions.append(function)
+                elif hasattr(func_data, 'name'):
+                    # Already a Function object
+                    functions.append(func_data)
+            
+            return functions
+            
         except Exception as e:
-            logger.error(f"Pseudocode generation failed: {e}")
-            raise
+            logger.error(f"Failed to parse specification: {e}", exc_info=True)
+            return []
     
-    async def _generate_postconditions_for_function(
+    async def _process_function(
         self,
         specification: str,
         function: Function,
-        result: CompleteEnhancedResult
+        edge_cases: Optional[List[str]],
+        generate_z3: bool
     ) -> FunctionResult:
-        """Generate postconditions for a single function."""
+        """
+        Process a single function through the pipeline.
+        
+        Args:
+            specification: Original specification
+            function: Function to process
+            edge_cases: Optional edge cases
+            generate_z3: Whether to generate Z3 code
+            
+        Returns:
+            FunctionResult with postconditions and Z3 translations
+        """
+        logger.info(f"Processing function: {function.name}")
+        
         func_result = FunctionResult(
             function_name=function.name,
             function_signature=function.signature,
             function_description=function.description,
-            pseudocode=function
+            pseudocode=function,
+            status=ProcessingStatus.IN_PROGRESS
         )
         
         try:
-            postconditions = await self.factory.postcondition.agenerate(
+            # Generate postconditions
+            postconditions = await self._generate_postconditions(
+                specification=specification,
                 function=function,
-                specification=specification
+                edge_cases=edge_cases
             )
             
             func_result.postconditions = postconditions
             func_result.postcondition_count = len(postconditions)
+            
+            # Calculate quality metrics
+            if postconditions:
+                self._calculate_function_metrics(func_result)
+            
+            # Generate Z3 translations if requested
+            if generate_z3 and postconditions:
+                z3_translations = await self._generate_z3_translations(
+                    postconditions=postconditions,
+                    function=function
+                )
+                func_result.z3_translations_count = len(z3_translations) if z3_translations else 0
+            
+            logger.info(
+                f"Completed {function.name}: "
+                f"{len(postconditions)} postconditions, "
+                f"{func_result.z3_translations_count} Z3 translations"
+            )
+            
             func_result.status = ProcessingStatus.SUCCESS
             
         except Exception as e:
-            logger.error(f"Failed to generate postconditions for {function.name}: {e}")
+            logger.error(f"Error processing function {function.name}: {e}")
             func_result.status = ProcessingStatus.FAILED
-            func_result.error_message = str(e)
-            result.errors.append(f"Error generating postconditions for {function.name}: {e}")
+            func_result.error_message = f"Processing error: {str(e)}"
         
         return func_result
     
-    async def _translate_all_to_z3(self, function_results: List[FunctionResult]) -> None:
-        """Translate all postconditions to Z3 code."""
-        for func_result in function_results:
-            if not func_result.postconditions:
-                continue
-            
-            function_context = {
-                'name': func_result.function_name,
-                'signature': func_result.function_signature,
-                'description': func_result.function_description,
-                'parameters': [
-                    {
-                        'name': p.name,
-                        'data_type': p.data_type,
-                        'description': p.description
-                    }
-                    for p in func_result.pseudocode.input_parameters
-                ] if func_result.pseudocode else []
-            }
-            
-            logger.info(f"\n🔄 Translating Z3 for function: {func_result.function_name}")
-            
-            translations = await self.factory.z3.atranslate_batch(
-                postconditions=func_result.postconditions,
-                function_context=function_context
-            )
-            
-            for pc, translation in zip(func_result.postconditions, translations):
-                pc.z3_translation = translation
-            
-            # Track metrics
-            func_result.z3_translations_count = len(translations)
-            func_result.z3_validations_passed = sum(
-                1 for t in translations if t.z3_validation_passed
-            )
-            func_result.z3_validations_failed = len(translations) - func_result.z3_validations_passed
-            
-            if translations:
-                solvers_created = sum(1 for t in translations if t.solver_created)
-                func_result.average_solver_creation_rate = solvers_created / len(translations)
-                
-                func_result.average_constraints_per_code = sum(
-                    t.constraints_added for t in translations
-                ) / len(translations)
-                
-                func_result.average_variables_per_code = sum(
-                    t.variables_declared for t in translations
-                ) / len(translations)
-                
-                logger.info(f"   ✅ Z3 validations: {func_result.z3_validations_passed}/{len(translations)} passed")
-    
-    def _compute_statistics(self, result: CompleteEnhancedResult) -> None:
+    async def _generate_postconditions(
+        self,
+        specification: str,
+        function: Function,
+        edge_cases: Optional[List[str]]
+    ) -> List[EnhancedPostcondition]:
         """
-        Compute overall statistics including quality aggregates.
-        
-        🔴 FIXED: Now calculates quality scores that were causing AttributeErrors
-        """
-        result.total_functions = len(result.function_results)
-        result.total_postconditions = sum(
-            fr.postcondition_count for fr in result.function_results
-        )
-        result.total_z3_translations = sum(
-            fr.z3_translations_count for fr in result.function_results
-        )
-        
-        # ====================================================================
-        # 🔴 FIX: Compute function-level quality aggregates
-        # ====================================================================
-        for fr in result.function_results:
-            if fr.postconditions:
-                # Calculate average quality score
-                fr.average_quality_score = sum(
-                    pc.overall_quality_score for pc in fr.postconditions
-                ) / len(fr.postconditions)
-                
-                # Calculate average robustness
-                fr.average_robustness_score = sum(
-                    pc.robustness_score for pc in fr.postconditions
-                ) / len(fr.postconditions)
-                
-                # Calculate edge case coverage
-                fr.edge_case_coverage_score = sum(
-                    len(pc.edge_cases_covered) for pc in fr.postconditions
-                ) / len(fr.postconditions)
-                
-                # Count total edge cases
-                fr.total_edge_cases_covered = sum(
-                    len(pc.edge_cases_covered) for pc in fr.postconditions
-                )
-        
-        # ====================================================================
-        # 🔴 FIX: Compute pipeline-level quality aggregates
-        # ====================================================================
-        if result.total_postconditions > 0:
-            # Average quality across all postconditions
-            all_quality_scores = [
-                pc.overall_quality_score 
-                for fr in result.function_results 
-                for pc in fr.postconditions
-            ]
-            result.average_quality_score = sum(all_quality_scores) / len(all_quality_scores)
-            
-            # Average robustness across all postconditions
-            all_robustness_scores = [
-                pc.robustness_score
-                for fr in result.function_results
-                for pc in fr.postconditions
-            ]
-            result.average_robustness_score = sum(all_robustness_scores) / len(all_robustness_scores)
-        
-        # Z3 validation statistics
-        if result.total_z3_translations > 0:
-            successful_validations = sum(
-                fr.z3_validations_passed for fr in result.function_results
-            )
-            result.z3_validation_success_rate = successful_validations / result.total_z3_translations
-            
-            total_solvers = sum(
-                fr.average_solver_creation_rate * fr.z3_translations_count
-                for fr in result.function_results
-                if fr.z3_translations_count > 0
-            )
-            result.solver_creation_rate = total_solvers / result.total_z3_translations
-    
-    def _generate_validation_report(self, result: CompleteEnhancedResult) -> None:
-        """Generate validation warnings."""
-        if not settings.z3_validation.generate_reports:
-            return
-        
-        if result.z3_validation_success_rate < settings.z3_validation.min_success_rate:
-            result.warnings.append(
-                f"⚠️  Z3 validation success rate ({result.z3_validation_success_rate:.1%}) "
-                f"below threshold ({settings.z3_validation.min_success_rate:.1%})"
-            )
-        
-        if result.solver_creation_rate < settings.z3_validation.min_solver_creation_rate:
-            result.warnings.append(
-                f"⚠️  Solver creation rate ({result.solver_creation_rate:.1%}) "
-                f"below threshold ({settings.z3_validation.min_solver_creation_rate:.1%})"
-            )
-    
-    # ========================================================================
-    # 🔴 MISSING SAVE METHODS - ADDED BELOW
-    # ========================================================================
-    
-    def _save_pseudocode(self, pseudocode_result: PseudocodeResult, output_dir: Path) -> None:
-        """
-        Save pseudocode to files.
-        
-        🔴 FIXED: This method was missing, causing AttributeError
-        """
-        pseudocode_dir = output_dir / "pseudocode"
-        pseudocode_dir.mkdir(exist_ok=True)
-        
-        # Save full JSON
-        full_path = pseudocode_dir / "pseudocode_full.json"
-        with open(full_path, 'w', encoding='utf-8') as f:
-            json.dump(pseudocode_result.model_dump(), f, indent=2)
-        
-        # Save human-readable summary
-        summary_path = pseudocode_dir / "pseudocode_summary.txt"
-        with open(summary_path, 'w', encoding='utf-8') as f:
-            f.write("=" * 80 + "\n")
-            f.write("GENERATED FUNCTIONS\n")
-            f.write("=" * 80 + "\n\n")
-            
-            for func in pseudocode_result.functions:
-                f.write(f"Function: {func.name}\n")
-                f.write(f"Signature: {func.signature}\n")
-                f.write(f"Description: {func.description}\n")
-                f.write(f"Return Type: {func.return_type}\n")
-                f.write(f"Complexity: {func.complexity}\n")
-                f.write(f"Memory: {func.memory_usage}\n")
-                
-                if func.input_parameters:
-                    f.write(f"\nInput Parameters:\n")
-                    for param in func.input_parameters:
-                        f.write(f"  - {param.name}: {param.data_type}\n")
-                        if param.description:
-                            f.write(f"    {param.description}\n")
-                
-                if func.edge_cases:
-                    f.write(f"\nEdge Cases:\n")
-                    for edge in func.edge_cases:
-                        f.write(f"  - {edge}\n")
-                
-                f.write("\n" + "-" * 80 + "\n\n")
-    
-    def _save_postconditions_detailed(self, result: CompleteEnhancedResult, output_dir: Path) -> None:
-        """
-        Save detailed postcondition information for each function.
-        
-        🔴 FIXED: This method was missing, causing AttributeError
-        """
-        postcond_dir = output_dir / "postconditions"
-        postcond_dir.mkdir(exist_ok=True)
-        
-        for func_result in result.function_results:
-            if not func_result.postconditions:
-                continue
-            
-            # Create filename
-            safe_name = "".join(c if c.isalnum() else "_" for c in func_result.function_name)
-            filename = f"{safe_name}_postconditions.json"
-            filepath = postcond_dir / filename
-            
-            # Prepare data
-            postconditions_data = []
-            for i, pc in enumerate(func_result.postconditions, 1):
-                pc_dict = pc.model_dump()
-                pc_dict['id'] = i
-                postconditions_data.append(pc_dict)
-            
-            # Save JSON
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump({
-                    "function": func_result.function_name,
-                    "signature": func_result.function_signature,
-                    "description": func_result.function_description,
-                    "postcondition_count": len(postconditions_data),
-                    "average_quality": func_result.average_quality_score,
-                    "average_robustness": func_result.average_robustness_score,
-                    "postconditions": postconditions_data
-                }, f, indent=2)
-            
-            # Also save human-readable version
-            txt_filename = f"{safe_name}_postconditions.txt"
-            txt_filepath = postcond_dir / txt_filename
-            
-            with open(txt_filepath, 'w', encoding='utf-8') as f:
-                f.write("=" * 80 + "\n")
-                f.write(f"POSTCONDITIONS: {func_result.function_name}\n")
-                f.write("=" * 80 + "\n\n")
-                f.write(f"Signature: {func_result.function_signature}\n")
-                f.write(f"Total: {len(func_result.postconditions)}\n")
-                f.write(f"Average Quality: {func_result.average_quality_score:.2f}\n")
-                f.write(f"Average Robustness: {func_result.average_robustness_score:.2f}\n\n")
-                
-                for i, pc in enumerate(func_result.postconditions, 1):
-                    f.write(f"Postcondition #{i}\n")
-                    f.write("-" * 80 + "\n")
-                    f.write(f"Formal: {pc.formal_text}\n")
-                    f.write(f"Natural: {pc.natural_language}\n")
-                    
-                    if pc.precise_translation:
-                        f.write(f"Translation: {pc.precise_translation}\n")
-                    
-                    if pc.reasoning:
-                        f.write(f"Reasoning: {pc.reasoning}\n")
-                    
-                    f.write(f"Quality: {pc.overall_quality_score:.2f}\n")
-                    f.write(f"Robustness: {pc.robustness_score:.2f}\n")
-                    f.write(f"Z3 Theory: {pc.z3_theory}\n")
-                    
-                    if pc.edge_cases_covered:
-                        f.write(f"Edge Cases: {', '.join(pc.edge_cases_covered)}\n")
-                    
-                    f.write("\n")
-    
-    def _save_z3_code(self, result: CompleteEnhancedResult, output_dir: Path) -> None:
-        """
-        Save Z3 verification code for each postcondition.
-        
-        🔴 FIXED: This method was missing, causing AttributeError
-        """
-        z3_dir = output_dir / "z3_code"
-        z3_dir.mkdir(exist_ok=True)
-        
-        for func_result in result.function_results:
-            if not func_result.postconditions:
-                continue
-            
-            for i, pc in enumerate(func_result.postconditions, 1):
-                if not pc.z3_translation or not pc.z3_translation.z3_code:
-                    continue
-                
-                # Create filename
-                safe_name = "".join(c if c.isalnum() else "_" for c in func_result.function_name)
-                filename = f"{safe_name}_pc{i}.py"
-                filepath = z3_dir / filename
-                
-                # Save Z3 code
-                with open(filepath, 'w', encoding='utf-8') as f:
-                    f.write(f"# Z3 Verification Code\n")
-                    f.write(f"# Function: {func_result.function_name}\n")
-                    f.write(f"# Postcondition {i}: {pc.natural_language}\n")
-                    f.write(f"# Formal: {pc.formal_text}\n")
-                    f.write(f"#\n")
-                    f.write(f"# Validation Status: {'✓ PASSED' if pc.z3_translation.z3_validation_passed else '✗ FAILED'}\n")
-                    if pc.z3_translation.validation_error:
-                        f.write(f"# Error: {pc.z3_translation.validation_error}\n")
-                    f.write(f"#\n\n")
-                    
-                    f.write(pc.z3_translation.z3_code)
-    
-    def _save_validation_report(self, result: CompleteEnhancedResult, output_dir: Path) -> None:
-        """
-        Save Z3 validation report.
-        
-        🔴 FIXED: This method was missing, causing AttributeError
-        """
-        report_path = output_dir / "validation_report.txt"
-        
-        with open(report_path, 'w', encoding='utf-8') as f:
-            f.write("=" * 80 + "\n")
-            f.write("Z3 VALIDATION REPORT\n")
-            f.write("=" * 80 + "\n\n")
-            
-            f.write(f"Session ID: {result.session_id}\n")
-            f.write(f"Specification: {result.specification}\n")
-            f.write(f"Generated: {result.started_at}\n\n")
-            
-            f.write("OVERALL STATISTICS\n")
-            f.write("-" * 80 + "\n")
-            f.write(f"Total Functions: {result.total_functions}\n")
-            f.write(f"Total Postconditions: {result.total_postconditions}\n")
-            f.write(f"Total Z3 Translations: {result.total_z3_translations}\n")
-            f.write(f"Validation Success Rate: {result.z3_validation_success_rate:.1%}\n")
-            f.write(f"Solver Creation Rate: {result.solver_creation_rate:.1%}\n")
-            f.write(f"Average Quality Score: {result.average_quality_score:.2f}\n")
-            f.write(f"Average Robustness Score: {result.average_robustness_score:.2f}\n\n")
-            
-            f.write("PER-FUNCTION DETAILS\n")
-            f.write("=" * 80 + "\n\n")
-            
-            for func_result in result.function_results:
-                f.write(f"Function: {func_result.function_name}\n")
-                f.write("-" * 80 + "\n")
-                f.write(f"Signature: {func_result.function_signature}\n")
-                f.write(f"Postconditions: {func_result.postcondition_count}\n")
-                f.write(f"Z3 Translations: {func_result.z3_translations_count}\n")
-                f.write(f"Validations Passed: {func_result.z3_validations_passed}\n")
-                f.write(f"Validations Failed: {func_result.z3_validations_failed}\n")
-                f.write(f"Average Quality: {func_result.average_quality_score:.2f}\n")
-                f.write(f"Average Robustness: {func_result.average_robustness_score:.2f}\n")
-                f.write(f"Edge Cases Covered: {func_result.total_edge_cases_covered}\n\n")
-            
-            if result.warnings:
-                f.write("WARNINGS\n")
-                f.write("-" * 80 + "\n")
-                for warning in result.warnings:
-                    f.write(f"{warning}\n")
-                f.write("\n")
-            
-            if result.errors:
-                f.write("ERRORS\n")
-                f.write("-" * 80 + "\n")
-                for error in result.errors:
-                    f.write(f"{error}\n")
-    
-    def _save_session_metadata(self, result: CompleteEnhancedResult, output_dir: Path, session_name: str) -> None:
-        """
-        Save session metadata.
-        
-        🔴 FIXED: This method was missing, causing AttributeError
-        """
-        metadata_path = output_dir / "session_metadata.txt"
-        
-        with open(metadata_path, 'w', encoding='utf-8') as f:
-            f.write("=" * 80 + "\n")
-            f.write("SESSION METADATA\n")
-            f.write("=" * 80 + "\n\n")
-            
-            f.write(f"Session Name: {session_name}\n")
-            f.write(f"Session ID: {result.session_id}\n")
-            f.write(f"Specification: {result.specification}\n\n")
-            
-            f.write("TIMESTAMPS\n")
-            f.write("-" * 80 + "\n")
-            f.write(f"Started: {result.started_at}\n")
-            f.write(f"Completed: {result.completed_at}\n")
-            f.write(f"Processing Time: {result.total_processing_time:.2f}s\n\n")
-            
-            f.write("STATUS\n")
-            f.write("-" * 80 + "\n")
-            f.write(f"Overall Status: {result.status.value}\n\n")
-            
-            f.write("STATISTICS\n")
-            f.write("-" * 80 + "\n")
-            f.write(f"Functions: {result.total_functions}\n")
-            f.write(f"Postconditions: {result.total_postconditions}\n")
-            f.write(f"Z3 Translations: {result.total_z3_translations}\n")
-            f.write(f"Validation Rate: {result.z3_validation_success_rate:.1%}\n")
-            f.write(f"Quality Score: {result.average_quality_score:.2f}\n")
-            f.write(f"Robustness Score: {result.average_robustness_score:.2f}\n")
-    
-    # ========================================================================
-    # save_results() METHOD (existing, modified to use the new save methods)
-    # ========================================================================
-    
-    def save_results(self, result: CompleteEnhancedResult, output_dir: Path) -> Path:
-        """
-        Save results to timestamped folder with all files.
+        Generate postconditions for a function.
         
         Args:
-            result: CompleteEnhancedResult to save
-            output_dir: Base output directory
+            specification: Original specification
+            function: Function to generate postconditions for
+            edge_cases: Optional edge cases to consider
             
         Returns:
-            Path to the created session directory
+            List of generated postconditions
         """
-        # Ensure absolute path
-        if not output_dir.is_absolute():
-            output_dir = output_dir.resolve()
-        
-        # Create timestamped folder
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        spec_words = result.specification.lower().split()[:3]
-        spec_name = "_".join("".join(c for c in word if c.isalnum()) for word in spec_words)
-        folder_name = f"{timestamp}_{spec_name}"
-        session_dir = output_dir / folder_name
-        
-        logger.info(f"📁 Creating new session folder: {folder_name}")
-        
-        # Create directory
-        session_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"✅ Session directory created: {session_dir}")
-        
-        files_created = []
-        
-        # 1. Save complete JSON result
         try:
-            json_path = session_dir / "complete_result.json"
-            with open(json_path, 'w', encoding='utf-8') as f:
-                f.write(result.model_dump_json(indent=2))
-                f.flush()
-                os.fsync(f.fileno())
+            # Build context for generation
+            context = self._build_generation_context(specification, function)
             
-            if json_path.exists():
-                size = json_path.stat().st_size
-                logger.info(f"✅ Saved: complete_result.json ({size:,} bytes)")
-                files_created.append(("complete_result.json", size))
+            # Generate postconditions using chain
+            postconditions = await self.factory.postcondition.agenerate(
+                function=function,
+                specification=specification,
+                context=context,
+                edge_cases=edge_cases
+            )
+            
+            return postconditions
+            
         except Exception as e:
-            logger.error(f"❌ Failed to save JSON: {e}")
+            logger.error(
+                f"Failed to generate postconditions for {function.name}: {e}"
+            )
+            return []
+    
+    async def _generate_z3_translations(
+        self,
+        postconditions: List[EnhancedPostcondition],
+        function: Function
+    ) -> List[Z3Translation]:
+        """
+        Generate Z3 translations for postconditions.
         
-        # 2. Save pseudocode (using new method)
-        if result.pseudocode_result:
-            try:
-                self._save_pseudocode(result.pseudocode_result, session_dir)
-            except Exception as e:
-                logger.error(f"❌ Failed to save pseudocode: {e}")
-        
-        # 3. Save postconditions (using new method)
+        Args:
+            postconditions: Postconditions to translate
+            function: Function context
+            
+        Returns:
+            List of Z3 translations
+        """
         try:
-            self._save_postconditions_detailed(result, session_dir)
+            translations = []
+            
+            # Translate each postcondition
+            for postcondition in postconditions:
+                translation = self.z3_translator.translate(
+                    postcondition=postcondition,
+                    function_context={
+                        "name": function.name,
+                        "signature": function.signature,
+                        "input_parameters": function.input_parameters,
+                        "return_type": function.return_type
+                    }
+                )
+                translations.append(translation)
+            
+            return translations
+            
         except Exception as e:
-            logger.error(f"❌ Failed to save postconditions: {e}")
+            logger.error(f"Failed to generate Z3 translations: {e}")
+            return []
+    
+    def _build_generation_context(
+        self,
+        specification: str,
+        function: Function
+    ) -> str:
+        """
+        Build context string for postcondition generation.
         
-        # 4. Save Z3 code (using new method)
+        Args:
+            specification: Original specification
+            function: Function being processed
+            
+        Returns:
+            Context string
+        """
+        context_parts = []
+        
+        # Add function details
+        if function.description:
+            context_parts.append(f"Function Purpose: {function.description}")
+        
+        if function.input_parameters:
+            params_str = ", ".join(
+                f"{p.name}: {p.data_type}"
+                for p in function.input_parameters
+            )
+            context_parts.append(f"Parameters: {params_str}")
+        
+        if function.return_type:
+            context_parts.append(f"Return Type: {function.return_type}")
+        
+        if function.body:
+            context_parts.append(f"Function Body:\n{function.body}")
+        
+        return "\n\n".join(context_parts)
+    
+    def _calculate_function_metrics(self, func_result: FunctionResult):
+        """
+        Calculate quality metrics for a function result.
+        
+        Args:
+            func_result: Function result to calculate metrics for
+        """
+        postconditions = func_result.postconditions
+        
+        if not postconditions:
+            return
+        
+        # Edge case coverage
+        func_result.total_edge_cases_covered = sum(
+            len(pc.edge_cases_covered) for pc in postconditions
+        )
+    
+    async def _save_results(self, request_id: str, result: CompleteEnhancedResult):
+        """
+        Save results to both request-centric and function-centric storage.
+        
+        Args:
+            request_id: Unique request identifier
+            result: Pipeline result to save
+        """
         try:
-            self._save_z3_code(result, session_dir)
+            # 1. Save to request-centric storage (backward compatible)
+            self.storage.save_results(request_id, result)
+            logger.info(f"Saved results to request storage: {request_id}")
+            
+            # 2. Save to function-centric storage (NEW)
+            for func_result in result.function_results:
+                self.storage.save_function_results(
+                    function_name=func_result.function_name,
+                    request_id=request_id,
+                    postconditions=func_result.postconditions,
+                    z3_translations=None,  # Z3 translations not stored separately in this version
+                    function_signature=func_result.function_signature,
+                    function_description=func_result.function_description
+                )
+                logger.info(
+                    f"Saved function results: {func_result.function_name} "
+                    f"(request: {request_id})"
+                )
+            
         except Exception as e:
-            logger.error(f"❌ Failed to save Z3 code: {e}")
+            logger.error(f"Failed to save results: {e}")
+            result.errors.append(f"Storage error: {str(e)}")
+    
+    @staticmethod
+    def _generate_request_id() -> str:
+        """
+        Generate a unique request identifier.
         
-        # 5. Save validation report (using new method)
+        Returns:
+            Request ID string
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return f"req_{timestamp}"
+    
+    # =========================================================================
+    # COMPATIBILITY METHODS (for main.py)
+    # =========================================================================
+    
+    def process_sync(self, specification: str, session_id: Optional[str] = None) -> CompleteEnhancedResult:
+        """
+        Synchronous wrapper for async run().
+        
+        Args:
+            specification: Natural language specification
+            session_id: Optional session identifier
+            
+        Returns:
+            CompleteEnhancedResult containing all generated postconditions and translations
+        """
+        return asyncio.run(self.run(specification, session_id=session_id))
+    
+    def save_results(self, result: CompleteEnhancedResult, output_dir: Path):
+        """
+        Save pipeline results to specified directory.
+        
+        Args:
+            result: Pipeline result to save
+            output_dir: Directory to save results to
+        """
         try:
-            self._save_validation_report(result, session_dir)
+            # Create output directory
+            output_dir = Path(output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save complete result as JSON
+            result_file = output_dir / "complete_result.json"
+            with open(result_file, 'w', encoding='utf-8') as f:
+                import json
+                json.dump(result.model_dump(), f, indent=2, default=str)
+            
+            logger.info(f"Saved complete result to {result_file}")
+            
+            # Also save using storage backend (dual write)
+            if hasattr(result, 'session_id'):
+                self.storage.save_results(result.session_id, result)
+            
         except Exception as e:
-            logger.error(f"❌ Failed to save validation report: {e}")
+            logger.error(f"Failed to save results: {e}")
+            raise
+    
+    # =========================================================================
+    # QUERY METHODS (NEW - for UI integration)
+    # =========================================================================
+    
+    def get_function_history(
+        self,
+        function_name: str
+    ) -> Dict[str, Any]:
+        """
+        Get complete history of postconditions for a function.
         
-        # 6. Save session metadata (using new method)
+        Args:
+            function_name: Name of the function
+            
+        Returns:
+            Dictionary with function history and statistics
+        """
         try:
-            self._save_session_metadata(result, session_dir, folder_name)
+            # Get summary statistics
+            summary = self.storage.get_function_summary(function_name)
+            
+            # Load all generations
+            postconditions_by_request = self.storage.load_function_postconditions(
+                function_name
+            )
+            z3_by_request = self.storage.load_function_z3_translations(
+                function_name
+            )
+            
+            # Build timeline
+            timeline = []
+            for request_id in summary.get("request_ids", []):
+                postconditions = postconditions_by_request.get(request_id, [])
+                z3_translations = z3_by_request.get(request_id, [])
+                
+                timeline.append({
+                    "request_id": request_id,
+                    "postcondition_count": len(postconditions),
+                    "z3_translation_count": len(z3_translations),
+                    "postconditions": [
+                        {
+                            "formal_text": pc.formal_text,
+                            "natural_language": pc.natural_language,
+                        }
+                        for pc in postconditions
+                    ]
+                })
+            
+            return {
+                "function_name": function_name,
+                "summary": summary,
+                "timeline": timeline
+            }
+            
         except Exception as e:
-            logger.error(f"❌ Failed to save session metadata: {e}")
+            logger.error(f"Failed to get function history: {e}")
+            return {"error": str(e)}
+    
+    def compare_generations(
+        self,
+        function_name: str,
+        request_id_1: str,
+        request_id_2: str
+    ) -> Dict[str, Any]:
+        """
+        Compare two generations of postconditions for a function.
         
-        # Count all created files
-        all_files = list(session_dir.rglob("*"))
-        all_files = [f for f in all_files if f.is_file()]
+        Args:
+            function_name: Name of the function
+            request_id_1: First request ID
+            request_id_2: Second request ID
+            
+        Returns:
+            Comparison results
+        """
+        try:
+            # Load both generations
+            all_pcs = self.storage.load_function_postconditions(function_name)
+            
+            gen1_pcs = all_pcs.get(request_id_1, [])
+            gen2_pcs = all_pcs.get(request_id_2, [])
+            
+            return {
+                "function_name": function_name,
+                "generation_1": {
+                    "request_id": request_id_1,
+                    "count": len(gen1_pcs),
+                    "postconditions": [pc.model_dump() for pc in gen1_pcs]
+                },
+                "generation_2": {
+                    "request_id": request_id_2,
+                    "count": len(gen2_pcs),
+                    "postconditions": [pc.model_dump() for pc in gen2_pcs]
+                },
+                "comparison": {
+                    "count_diff": len(gen2_pcs) - len(gen1_pcs)
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to compare generations: {e}")
+            return {"error": str(e)}
+    
+    def list_all_functions(self) -> List[Dict[str, Any]]:
+        """
+        List all functions with summary information.
         
-        logger.info(f"\n📊 Session Summary:")
-        logger.info(f"   Folder: {folder_name}")
-        logger.info(f"   Total files: {len(all_files)}")
-        
-        print(f"\n✅ Results saved to new session: {session_dir}")
-        print(f"   📁 Session: {folder_name}")
-        print(f"   📄 Files: {len(all_files)}")
-        
-        return session_dir
+        Returns:
+            List of function summaries
+        """
+        try:
+            function_names = self.storage.list_all_functions()
+            
+            summaries = []
+            for func_name in function_names:
+                summary = self.storage.get_function_summary(func_name)
+                summaries.append(summary)
+            
+            # Sort by last updated (most recent first)
+            summaries.sort(
+                key=lambda x: x.get("metadata", {}).get("last_updated", ""),
+                reverse=True
+            )
+            
+            return summaries
+            
+        except Exception as e:
+            logger.error(f"Failed to list functions: {e}")
+            return []
 
 
-def process_specification(specification: str, codebase_path: Optional[Path] = None) -> CompleteEnhancedResult:
-    """Convenience function to process a specification."""
-    pipeline = PostconditionPipeline(codebase_path=codebase_path)
-    return pipeline.process_sync(specification)
+# Convenience function for creating pipeline
+def create_pipeline(
+    output_dir: str = "outputs",
+    streaming: bool = False
+) -> PostconditionPipeline:
+    """
+    Create a PostconditionPipeline instance.
+    
+    Args:
+        output_dir: Directory for storing results
+        streaming: Enable streaming responses
+        
+    Returns:
+        Configured pipeline instance
+    """
+    storage = ResultStorage(Path(output_dir))
+    return PostconditionPipeline(storage=storage, streaming=streaming)

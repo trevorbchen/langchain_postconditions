@@ -1,0 +1,8 @@
+{
+  "function_name": "find_target",
+  "function_signature": "int find_target(int* array, int size, int target)",
+  "function_description": "This function finds a target number in an unsorted array",
+  "postcondition_count": 0,
+  "z3_translations_count": 0,
+  "status": "success"
+}

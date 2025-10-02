@@ -1,0 +1,11 @@
+{
+  "function_name": "find_path",
+  "function_signature": "int find_path(int** array, Point a, Point b)",
+  "function_description": "Finds a path from point A to B in a 2D array where 1s serve as walls",
+  "first_seen": "2025-10-02T16:04:17.846950",
+  "total_generations": 1,
+  "total_postconditions": 0,
+  "total_z3_translations": 0,
+  "generations_history": [],
+  "last_updated": "2025-10-02T16:04:17.846950"
+}

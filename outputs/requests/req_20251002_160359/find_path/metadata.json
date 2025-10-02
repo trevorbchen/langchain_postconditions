@@ -1,0 +1,8 @@
+{
+  "function_name": "find_path",
+  "function_signature": "int find_path(int** array, Point a, Point b)",
+  "function_description": "Finds a path from point A to B in a 2D array where 1s serve as walls",
+  "postcondition_count": 0,
+  "z3_translations_count": 0,
+  "status": "success"
+}

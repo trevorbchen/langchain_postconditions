@@ -1,0 +1,8 @@
+{
+  "function_name": "find_target",
+  "function_signature": "int find_target(int* array, int size, int target)",
+  "function_description": "This function finds a target number in an unsorted array",
+  "first_seen": "2025-10-02T15:57:26.333385",
+  "total_generations": 1,
+  "last_updated": "2025-10-02T15:57:26.333385"
+}

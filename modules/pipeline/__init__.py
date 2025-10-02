@@ -6,17 +6,17 @@ postcondition generation workflow.
 
 Main components:
 - PostconditionPipeline: Main orchestrator class
-- process_specification: Convenience function for processing specifications
+- create_pipeline: Convenience function for creating pipeline instances
 """
 
 from modules.pipeline.pipeline import (
     PostconditionPipeline,
-    process_specification
+    create_pipeline
 )
 
 __all__ = [
     'PostconditionPipeline',
-    'process_specification',
+    'create_pipeline',
 ]
 
 __version__ = '2.0.0'
