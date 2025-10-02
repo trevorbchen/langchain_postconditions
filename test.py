@@ -1,205 +1,130 @@
 #!/usr/bin/env python3
 """
-Debug script for pseudocode generation issues.
-
-This will help identify what's failing in the pseudocode chain.
+Diagnostic script to test file saving functionality
 """
 
-import sys
 from pathlib import Path
+import sys
+import os
 
-# Add project root to path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
+print("=" * 80)
+print("FILE SAVE DIAGNOSTIC TEST")
+print("=" * 80)
 
-from core.chains import PseudocodeChain
-import logging
+# Test 1: Current directory
+print("\n1. Current Directory:")
+cwd = Path.cwd()
+print(f"   {cwd}")
+print(f"   Absolute: {cwd.resolve()}")
 
-# Enable detailed logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Test 2: Create test directory
+print("\n2. Creating Test Directory:")
+test_dir = cwd / "output" / "test_diagnostic"
+try:
+    test_dir.mkdir(parents=True, exist_ok=True)
+    print(f"   ✅ Created: {test_dir}")
+    print(f"   Exists: {test_dir.exists()}")
+    print(f"   Is directory: {test_dir.is_dir()}")
+except Exception as e:
+    print(f"   ❌ Failed: {e}")
+    sys.exit(1)
 
-logger = logging.getLogger(__name__)
-
-
-def test_pseudocode_generation():
-    """Test pseudocode generation step by step."""
+# Test 3: Write test file
+print("\n3. Writing Test File:")
+test_file = test_dir / "test.txt"
+try:
+    with open(test_file, 'w', encoding='utf-8') as f:
+        f.write("Test content\n")
+        f.write(f"Current directory: {cwd}\n")
+        f.write(f"Test directory: {test_dir}\n")
+        f.flush()
+        os.fsync(f.fileno())
     
-    print("=" * 70)
-    print("PSEUDOCODE GENERATION DEBUG")
-    print("=" * 70)
-    
-    # Step 1: Check API key
-    print("\n1. Checking API key...")
-    try:
-        from config.settings import settings
-        api_key = settings.openai_api_key
-        
-        if not api_key:
-            print("❌ ERROR: OPENAI_API_KEY not found in environment!")
-            print("\nFix:")
-            print("  1. Create .env file in project root")
-            print("  2. Add: OPENAI_API_KEY=sk-your-key-here")
-            return False
-        
-        if not api_key.startswith("sk-"):
-            print(f"❌ WARNING: API key doesn't start with 'sk-': {api_key[:10]}...")
-            return False
-        
-        print(f"✅ API key found: {api_key[:20]}...{api_key[-4:]}")
-        
-    except Exception as e:
-        print(f"❌ ERROR loading settings: {e}")
-        return False
-    
-    # Step 2: Create pseudocode chain
-    print("\n2. Creating PseudocodeChain...")
-    try:
-        chain = PseudocodeChain()
-        print("✅ PseudocodeChain created successfully")
-    except Exception as e:
-        print(f"❌ ERROR creating chain: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-    
-    # Step 3: Test simple generation
-    print("\n3. Testing simple pseudocode generation...")
-    print("   Specification: 'Sort an array'")
-    
-    try:
-        result = chain.generate("Sort an array")
-        
-        print("\n4. Checking result...")
-        print(f"   Type: {type(result)}")
-        print(f"   Has functions: {hasattr(result, 'functions')}")
-        
-        if hasattr(result, 'functions'):
-            print(f"   Number of functions: {len(result.functions)}")
-            
-            if result.functions:
-                print("\n✅ SUCCESS! Pseudocode generated:")
-                for func in result.functions:
-                    print(f"      - {func.name}: {func.description[:50]}...")
-                return True
-            else:
-                print("❌ ERROR: No functions in result")
-                print(f"   Result: {result}")
-                return False
-        else:
-            print("❌ ERROR: Result doesn't have 'functions' attribute")
-            print(f"   Result: {result}")
-            return False
-        
-    except Exception as e:
-        print(f"\n❌ ERROR during generation: {type(e).__name__}")
-        print(f"   Message: {str(e)}")
-        
-        # Detailed error info
-        if "timeout" in str(e).lower():
-            print("\n💡 TIMEOUT ERROR:")
-            print("   - Request took longer than 180 seconds")
-            print("   - Try: Use faster model (gpt-4-turbo-preview)")
-            print("   - Try: Simplify the specification")
-        
-        elif "rate" in str(e).lower():
-            print("\n💡 RATE LIMIT ERROR:")
-            print("   - You've exceeded OpenAI API rate limits")
-            print("   - Wait a few minutes and try again")
-            print("   - Check your OpenAI usage dashboard")
-        
-        elif "api" in str(e).lower() or "key" in str(e).lower():
-            print("\n💡 API KEY ERROR:")
-            print("   - Check your API key is correct")
-            print("   - Verify key is active in OpenAI dashboard")
-            print("   - Make sure key has proper permissions")
-        
-        else:
-            print("\n💡 UNKNOWN ERROR:")
-            print("   Full traceback:")
-            import traceback
-            traceback.print_exc()
-        
-        return False
+    print(f"   ✅ Wrote: {test_file}")
+except Exception as e:
+    print(f"   ❌ Failed: {e}")
+    sys.exit(1)
 
+# Test 4: Verify file exists
+print("\n4. Verifying File:")
+if test_file.exists():
+    size = test_file.stat().st_size
+    content = test_file.read_text()
+    print(f"   ✅ File exists")
+    print(f"   Size: {size} bytes")
+    print(f"   Content preview: {content[:50]}...")
+else:
+    print(f"   ❌ File does not exist!")
+    sys.exit(1)
 
-def test_direct_openai():
-    """Test direct OpenAI API call to isolate the issue."""
-    
-    print("\n" + "=" * 70)
-    print("DIRECT OPENAI API TEST")
-    print("=" * 70)
-    
-    try:
-        from config.settings import settings
-        import openai
-        
-        print("\n1. Creating OpenAI client...")
-        client = openai.OpenAI(api_key=settings.openai_api_key)
-        print("✅ Client created")
-        
-        print("\n2. Sending test request...")
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": "Say 'API is working!'"}
-            ],
-            max_tokens=50,
-            temperature=0.1
-        )
-        
-        print("✅ Response received:")
-        print(f"   {response.choices[0].message.content}")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Direct API call failed: {type(e).__name__}")
-        print(f"   {str(e)}")
-        
-        if "invalid" in str(e).lower() or "authentication" in str(e).lower():
-            print("\n💡 API KEY IS INVALID")
-            print("   1. Check your .env file")
-            print("   2. Verify key on OpenAI dashboard")
-            print("   3. Generate a new key if needed")
-        
-        return False
+# Test 5: List directory contents
+print("\n5. Directory Contents:")
+files = list(test_dir.glob("*"))
+print(f"   Found {len(files)} items:")
+for f in files:
+    print(f"     - {f.name} ({'file' if f.is_file() else 'dir'})")
 
+# Test 6: Test with JSON
+print("\n6. Testing JSON File:")
+import json
+json_file = test_dir / "test.json"
+test_data = {
+    "test": "data",
+    "number": 123,
+    "nested": {"key": "value"}
+}
 
-if __name__ == "__main__":
-    print("""
-╔═══════════════════════════════════════════════════════════════════╗
-║                                                                   ║
-║           PSEUDOCODE GENERATION DEBUG SCRIPT                      ║
-║                                                                   ║
-╚═══════════════════════════════════════════════════════════════════╝
-""")
+try:
+    with open(json_file, 'w', encoding='utf-8') as f:
+        json.dump(test_data, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
     
-    # Run tests
-    success1 = test_direct_openai()
-    
-    if success1:
-        print("\n" + "="*70)
-        success2 = test_pseudocode_generation()
-        
-        if success2:
-            print("\n" + "="*70)
-            print("✅ ALL TESTS PASSED!")
-            print("="*70)
-            print("\nYour pseudocode generation is working correctly.")
-            print("The issue must be elsewhere in the pipeline.")
-        else:
-            print("\n" + "="*70)
-            print("❌ PSEUDOCODE GENERATION FAILED")
-            print("="*70)
-            print("\nDirect API works, but pseudocode chain fails.")
-            print("Check the error messages above for details.")
+    if json_file.exists():
+        print(f"   ✅ JSON saved: {json_file}")
+        print(f"   Size: {json_file.stat().st_size} bytes")
     else:
-        print("\n" + "="*70)
-        print("❌ API CONNECTION FAILED")
-        print("="*70)
-        print("\nFix your API key first, then run this script again.")
+        print(f"   ❌ JSON file not found!")
+except Exception as e:
+    print(f"   ❌ JSON save failed: {e}")
+
+# Test 7: Test pipeline output directory
+print("\n7. Testing Pipeline Output Directory:")
+pipeline_dir = cwd / "output" / "pipeline_results"
+try:
+    pipeline_dir.mkdir(parents=True, exist_ok=True)
+    print(f"   ✅ Created: {pipeline_dir}")
     
-    sys.exit(0 if success1 and success2 else 1)
+    # Try to write a file there
+    test_pipeline_file = pipeline_dir / "test_write.txt"
+    test_pipeline_file.write_text("Pipeline test")
+    
+    if test_pipeline_file.exists():
+        print(f"   ✅ Can write to pipeline directory")
+        test_pipeline_file.unlink()  # Clean up
+    else:
+        print(f"   ❌ Cannot write to pipeline directory")
+        
+except Exception as e:
+    print(f"   ❌ Pipeline directory test failed: {e}")
+
+# Test 8: Check permissions
+print("\n8. Checking Permissions:")
+try:
+    import stat
+    mode = test_dir.stat().st_mode
+    print(f"   Directory mode: {oct(mode)}")
+    print(f"   Readable: {os.access(test_dir, os.R_OK)}")
+    print(f"   Writable: {os.access(test_dir, os.W_OK)}")
+    print(f"   Executable: {os.access(test_dir, os.X_OK)}")
+except Exception as e:
+    print(f"   ❌ Permission check failed: {e}")
+
+# Final summary
+print("\n" + "=" * 80)
+print("DIAGNOSTIC COMPLETE")
+print("=" * 80)
+print(f"\nTest files created in: {test_dir}")
+print(f"You can verify manually by checking: {test_dir.absolute()}")
+print("\nIf all tests passed, file saving should work correctly.")
+print("=" * 80)

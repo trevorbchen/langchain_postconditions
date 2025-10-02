@@ -2,8 +2,7 @@
 """
 Interactive Main Interface for Postcondition Generation Pipeline
 
-Updated to work with current CompleteEnhancedResult model.
-All field references corrected to match core/models.py.
+FIXED VERSION - Enhanced file saving verification and error handling
 """
 
 import sys
@@ -11,6 +10,7 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
+import os
 
 # Add project root to path
 project_root = Path(__file__).parent
@@ -47,6 +47,7 @@ def print_banner():
 {Colors.HEADER}{'='*80}
     POSTCONDITION GENERATION PIPELINE
     Enhanced with LangChain - Rich Output System
+    🔧 FIXED VERSION - Verified File Saving
 {'='*80}{Colors.ENDC}
 """
     print(banner)
@@ -143,11 +144,12 @@ def get_output_preference() -> Path:
     Ask user where to save results.
     
     Returns:
-        Path to output directory
+        Absolute path to output directory
     """
     print_section("💾 Step 2: Output Location")
     
-    default_path = Path("output/pipeline_results")
+    # 🔴 FIX: Use absolute path
+    default_path = (Path.cwd() / "output" / "pipeline_results").resolve()
     
     print(f"\n{Colors.BOLD}Default output location:{Colors.ENDC} {default_path}")
     print(f"{Colors.BOLD}Use default? (y/n):{Colors.ENDC} ", end="")
@@ -160,11 +162,14 @@ def get_output_preference() -> Path:
     print(f"{Colors.BOLD}Enter custom output path:{Colors.ENDC} ", end="")
     custom_path = input().strip()
     
-    return Path(custom_path) if custom_path else default_path
+    if custom_path:
+        return Path(custom_path).resolve()
+    else:
+        return default_path
 
 
 # ============================================================================
-# RESULT DISPLAY FUNCTIONS (✅ UPDATED FOR CURRENT MODEL)
+# RESULT DISPLAY FUNCTIONS
 # ============================================================================
 
 def display_result_summary(result):
@@ -176,18 +181,18 @@ def display_result_summary(result):
     """
     print_section("📊 Results Summary")
     
-    # Status - ✅ FIXED: Use 'status' not 'overall_status'
+    # Status
     status_color = Colors.OKGREEN if result.status == ProcessingStatus.SUCCESS else Colors.WARNING
     print(f"\n{Colors.BOLD}Status:{Colors.ENDC} {status_color}{result.status.value.upper()}{Colors.ENDC}")
     print(f"{Colors.BOLD}Session ID:{Colors.ENDC} {result.session_id}")
     print(f"{Colors.BOLD}Processing Time:{Colors.ENDC} {result.total_processing_time:.1f}s")
     
-    # Generation statistics - ✅ FIXED: Use correct field names
+    # Generation statistics
     print(f"\n{Colors.BOLD}Generation Statistics:{Colors.ENDC}")
     print(f"  • Functions Created: {result.total_functions}")
     print(f"  • Total Postconditions: {result.total_postconditions}")
     
-    # Calculate Z3 stats from function_results (fields don't exist at top level)
+    # Calculate Z3 stats from function_results
     successful_z3 = sum(fr.z3_translations_count for fr in result.function_results)
     validated_z3 = sum(fr.z3_validations_passed for fr in result.function_results)
     
@@ -214,7 +219,6 @@ def display_result_summary(result):
                 print(f"    Avg Quality: {func_result.average_quality_score:.2f}")
                 print(f"    Avg Robustness: {func_result.average_robustness_score:.2f}")
                 print(f"    Edge Cases/PC: {func_result.edge_case_coverage_score:.1f}")
-                # ✅ FIXED: Use z3_validations_passed, not z3_success_count
                 print(f"    Z3 Validated: {func_result.z3_validations_passed}/{func_result.postcondition_count}")
 
 
@@ -290,37 +294,63 @@ def display_errors_warnings(result):
 
 def display_saved_location(saved_path: Path):
     """
-    Display where results were saved.
+    Display where results were saved with verification.
     
     Args:
         saved_path: Path to saved results directory
     """
     print(f"\n✅ Results saved to: {Colors.BOLD}{saved_path}{Colors.ENDC}")
     
-    # List actual files that were created
+    # 🔴 FIX: Verify files actually exist
     if saved_path.exists():
-        files = list(saved_path.glob("*"))
+        files = list(saved_path.rglob("*"))
+        files = [f for f in files if f.is_file()]  # Only show files, not directories
+        
         if files:
-            print(f"   📄 {', '.join(f.name for f in files)}")
+            print(f"\n📁 Created {len(files)} files:")
+            for file in sorted(files):
+                relative = file.relative_to(saved_path)
+                size = file.stat().st_size
+                print(f"   📄 {relative} ({size:,} bytes)")
+        else:
+            print_error(f"No files found in {saved_path}!")
+            print(f"   Directory exists but is empty")
+    else:
+        print_error(f"Output directory does not exist: {saved_path}")
 
 
 # ============================================================================
-# MAIN PIPELINE EXECUTION
+# MAIN PIPELINE EXECUTION (🔴 FIXED VERSION)
 # ============================================================================
 
 def run_pipeline(specification: str, output_dir: Path, codebase_path: Optional[Path] = None):
     """
     Run the postcondition generation pipeline.
     
+    🔴 FIXED: Enhanced file saving verification
+    
     Args:
         specification: Natural language specification
-        output_dir: Where to save results
+        output_dir: Where to save results (absolute path)
         codebase_path: Optional path to existing codebase
         
     Returns:
         CompleteEnhancedResult or None if failed
     """
     print_section("⚡ Step 3: Generating Postconditions")
+    
+    # 🔴 FIX 1: Verify output directory is absolute
+    if not output_dir.is_absolute():
+        output_dir = output_dir.resolve()
+        print_info(f"Using absolute path: {output_dir}")
+    
+    # 🔴 FIX 2: Create output directory immediately
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        print_info(f"Output directory ready: {output_dir}")
+    except Exception as e:
+        print_error(f"Failed to create output directory: {e}")
+        return None
     
     try:
         # Initialize pipeline
@@ -331,9 +361,36 @@ def run_pipeline(specification: str, output_dir: Path, codebase_path: Optional[P
         print_info("Processing specification...")
         result = pipeline.process_sync(specification)
         
-        # Save results
+        # 🔴 FIX 3: Explicit save with verification
         print_info("Saving results...")
-        pipeline.save_results(result, output_dir)
+        
+        try:
+            pipeline.save_results(result, output_dir)
+            
+            # 🔴 FIX 4: Verify files were actually created
+            created_files = list(output_dir.rglob("*"))
+            created_files = [f for f in created_files if f.is_file()]
+            
+            if created_files:
+                print_success(f"Created {len(created_files)} files")
+                for file in created_files:
+                    print_info(f"  ✓ {file.name} ({file.stat().st_size:,} bytes)")
+            else:
+                print_error(f"No files created in {output_dir}!")
+                print_warning("This may indicate a file saving issue")
+                
+                # Try to save manually as fallback
+                print_info("Attempting manual save as fallback...")
+                manual_save_fallback(result, output_dir)
+        
+        except Exception as save_error:
+            print_error(f"Save failed: {save_error}")
+            import traceback
+            traceback.print_exc()
+            
+            # Try manual fallback
+            print_info("Attempting manual save as fallback...")
+            manual_save_fallback(result, output_dir)
         
         # Display results
         print_success("Pipeline completed!")
@@ -350,6 +407,45 @@ def run_pipeline(specification: str, output_dir: Path, codebase_path: Optional[P
         print(f"\n{Colors.FAIL}Traceback:{Colors.ENDC}")
         traceback.print_exc()
         return None
+
+
+def manual_save_fallback(result, output_dir: Path):
+    """
+    Fallback manual save if pipeline save_results fails.
+    
+    🔴 NEW: Emergency backup save method
+    """
+    try:
+        # Save JSON result
+        json_path = output_dir / "complete_result.json"
+        print_info(f"Writing to: {json_path}")
+        
+        with open(json_path, 'w', encoding='utf-8') as f:
+            f.write(result.model_dump_json(indent=2))
+        
+        if json_path.exists():
+            print_success(f"Saved: {json_path} ({json_path.stat().st_size:,} bytes)")
+        else:
+            print_error(f"Failed to create: {json_path}")
+        
+        # Save simple summary
+        summary_path = output_dir / "summary.txt"
+        with open(summary_path, 'w', encoding='utf-8') as f:
+            f.write("=" * 80 + "\n")
+            f.write("POSTCONDITION GENERATION SUMMARY\n")
+            f.write("=" * 80 + "\n\n")
+            f.write(f"Session ID: {result.session_id}\n")
+            f.write(f"Specification: {result.specification}\n")
+            f.write(f"Status: {result.status.value}\n")
+            f.write(f"Functions: {result.total_functions}\n")
+            f.write(f"Postconditions: {result.total_postconditions}\n")
+            f.write(f"Z3 Translations: {result.total_z3_translations}\n")
+        
+        if summary_path.exists():
+            print_success(f"Saved: {summary_path}")
+        
+    except Exception as e:
+        print_error(f"Manual fallback save also failed: {e}")
 
 
 # ============================================================================
@@ -376,6 +472,9 @@ def interactive_mode():
     # Get output location
     output_dir = get_output_preference()
     
+    # 🔴 FIX: Show absolute path
+    print_info(f"Saving to absolute path: {output_dir}")
+    
     # Run pipeline
     result = run_pipeline(specification, output_dir)
     
@@ -383,6 +482,7 @@ def interactive_mode():
     print(f"\n{Colors.HEADER}{'='*80}{Colors.ENDC}")
     if result and result.status == ProcessingStatus.SUCCESS:
         print_success("All done! Check the output files for detailed results.")
+        print_info(f"Output location: {output_dir}")
     else:
         print_warning("Pipeline completed with issues. Check errors above.")
     print(f"{Colors.HEADER}{'='*80}{Colors.ENDC}\n")
@@ -397,8 +497,8 @@ def command_line_mode(args):
     print_banner()
     
     specification = args.spec
-    output_dir = Path(args.output) if args.output else Path("output/pipeline_results")
-    codebase_path = Path(args.codebase) if args.codebase else None
+    output_dir = Path(args.output).resolve() if args.output else (Path.cwd() / "output" / "pipeline_results").resolve()
+    codebase_path = Path(args.codebase).resolve() if args.codebase else None
     
     print(f"{Colors.BOLD}Specification:{Colors.ENDC} {specification}")
     print(f"{Colors.BOLD}Output Directory:{Colors.ENDC} {output_dir}")
@@ -460,7 +560,7 @@ Examples:
     parser.add_argument(
         '--version', '-v',
         action='version',
-        version='Postcondition Pipeline v2.0.0'
+        version='Postcondition Pipeline v2.0.0 (Fixed)'
     )
     
     return parser.parse_args()
@@ -508,6 +608,17 @@ def check_environment():
         except ImportError:
             issues.append(f"Missing required module: {module}")
     
+    # 🔴 FIX: Check write permissions
+    test_dir = Path.cwd() / "output" / "test_write"
+    try:
+        test_dir.mkdir(parents=True, exist_ok=True)
+        test_file = test_dir / "test.txt"
+        test_file.write_text("test")
+        test_file.unlink()
+        test_dir.rmdir()
+    except Exception as e:
+        issues.append(f"Cannot write to output directory: {e}")
+    
     # Display results
     if issues:
         print_error("Environment check failed!")
@@ -518,6 +629,7 @@ def check_environment():
         print(f"\n{Colors.BOLD}To fix:{Colors.ENDC}")
         print("1. Create .env file with: OPENAI_API_KEY=sk-your-key-here")
         print("2. Install dependencies: pip install -r requirements.txt")
+        print("3. Ensure write permissions in current directory")
         print()
         return False
     
@@ -560,7 +672,6 @@ def main():
 
 if __name__ == "__main__":
     # Ensure errors are visible
-    import os
     os.environ['PYTHONUNBUFFERED'] = '1'
     
     # Run with error catching

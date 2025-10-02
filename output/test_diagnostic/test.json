@@ -1,0 +1,7 @@
+{
+  "test": "data",
+  "number": 123,
+  "nested": {
+    "key": "value"
+  }
+}

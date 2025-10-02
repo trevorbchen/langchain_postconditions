@@ -1,0 +1,3 @@
+Test content
+Current directory: C:\Users\Trevo\OneDrive\Desktop\postcondition_system
+Test directory: C:\Users\Trevo\OneDrive\Desktop\postcondition_system\output\test_diagnostic

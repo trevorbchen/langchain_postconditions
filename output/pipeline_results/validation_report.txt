@@ -2,8 +2,8 @@
 Z3 VALIDATION REPORT
 ================================================================================
 
-Session ID: 706c940e-7d20-4907-a3d8-0566eb154e39
-Generated: 2025-10-01T23:03:42.742713
+Session ID: 264eb44a-e32f-47ac-82ec-601435d69583
+Generated: 2025-10-01T23:22:35.680974
 
 📊 OVERVIEW
 --------------------------------------------------------------------------------
@@ -18,19 +18,14 @@ Solver Creation Rate:   0.0%
 Average Quality:        0.91
 Average Validation:     0.50
 
-📋 PER-FUNCTION RESULTS
---------------------------------------------------------------------------------
 
 Function: reverse_list
   Postconditions:       2
   Z3 Translations:      2
   Validations Passed:   2/2
-  Solver Creation Rate: 0.0%
-  Avg Constraints:      0.0
-  Avg Variables:        0.0
 
 
-⚠️  WARNINGS & RECOMMENDATIONS
+⚠️  WARNINGS
 --------------------------------------------------------------------------------
 ✅ All Z3 validations passed!
 
