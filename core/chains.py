@@ -1,16 +1,16 @@
 """
-LangChain Chains - Complete Rewrite with All Enhancements
+LangChain Chains - Streamlined Version (No Scoring/Ranking)
 
-FIXES:
-- ✅ Fixed template variable escaping bug (JSON braces)
-- ✅ Requests ALL rich fields from LLM (15+ new fields)
-- ✅ Parses ALL fields from LLM responses
-- ✅ Adds translation chain for precise_translation
-- ✅ Adds Z3 validation
-- ✅ Batch Z3 translation support
-- ✅ Priority score calculation
+CHANGES FROM ORIGINAL:
+- ❌ Removed parsing of scoring fields (confidence_score, robustness_score, etc.)
+- ❌ Removed parsing of ranking fields (organization_rank, importance_category, etc.)
+- ❌ Removed _calculate_priority_score method
+- ✅ KEPT parsing of rich content (precise_translation, reasoning, edge_cases_covered, coverage_gaps)
+- ✅ KEPT translation chain for precise_translation
+- ✅ KEPT Z3 validation
+- ✅ KEPT batch Z3 translation
 
-This file is production-ready and replaces the entire core/chains.py file.
+This maintains all the valuable functionality while removing the scoring overhead.
 """
 
 import sys
@@ -108,7 +108,6 @@ class PseudocodeChain:
     "input_parameters": [{{{{ "name": "param", "data_type": "int*", "description": "desc" }}}}],
     "output_parameters": [],
     "return_values": [{{{{ "condition": "success", "value": "0", "description": "ok" }}}}],
-    "preconditions": ["arr != NULL", "size > 0"],
     "edge_cases": ["Empty array", "NULL pointer", "Single element"],
     "complexity": "O(n)",
     "memory_usage": "O(1)",
@@ -182,18 +181,19 @@ Return ONLY valid JSON, no markdown or explanations."""
 
 
 # ============================================================================
-# POSTCONDITION GENERATION CHAIN (ENHANCED)
+# POSTCONDITION GENERATION CHAIN (STREAMLINED)
 # ============================================================================
 
 class PostconditionChain:
     """
-    Generates formal postconditions with comprehensive rich fields.
+    Generates formal postconditions with rich explanatory fields.
     
-    ENHANCEMENTS:
-    - Requests 15+ fields from LLM (translations, reasoning, scores)
-    - Parses all rich fields properly
-    - Calculates priority scores
-    - Fills missing translations automatically
+    STREAMLINED VERSION:
+    - Requests: formal_text, natural_language, precise_translation, reasoning,
+      edge_cases_covered, coverage_gaps, z3_theory
+    - Does NOT request: scoring fields, ranking fields
+    - Does NOT parse: scoring fields, ranking fields
+    - Does NOT calculate: priority scores
     """
     
     def __init__(self, streaming: bool = False):
@@ -208,14 +208,12 @@ class PostconditionChain:
     
     def _create_prompt(self) -> ChatPromptTemplate:
         """
-        Create enhanced prompt requesting ALL rich fields.
+        Create streamlined prompt requesting ONLY essential rich fields.
         
         CRITICAL FIX: All JSON braces are doubled {{{{ }}}} to escape them
-        for Python's string formatting. This prevents the LangChain error:
-        "Input to ChatPromptTemplate is missing variables"
+        for Python's string formatting.
         """
         
-        # PROPERLY ESCAPED JSON EXAMPLES
         system_template = """You are an expert in formal specification writing.
 
 Generate 6-10 diverse postconditions with COMPREHENSIVE analysis covering:
@@ -223,7 +221,6 @@ Generate 6-10 diverse postconditions with COMPREHENSIVE analysis covering:
 - Boundary conditions  
 - Edge cases
 - Error handling
-- Performance characteristics
 
 Use mathematical notation:
 - ∀x: for all x
@@ -248,12 +245,6 @@ Return JSON array with this EXACT structure (note: all JSON braces are doubled):
     "natural_language": "Array is sorted in non-decreasing order",
     "precise_translation": "For every pair of indices i and j where i comes before j, the element at position i is less than or equal to the element at position j",
     "reasoning": "This ensures the fundamental sorting property holds for all adjacent and non-adjacent pairs, preventing any out-of-order elements",
-    "confidence_score": 0.95,
-    "robustness_score": 0.92,
-    "clarity_score": 0.95,
-    "completeness_score": 0.90,
-    "testability_score": 0.88,
-    "mathematical_quality_score": 0.93,
     "z3_theory": "arrays",
     "edge_cases": ["empty array", "single element", "duplicates"],
     "edge_cases_covered": [
@@ -262,21 +253,19 @@ Return JSON array with this EXACT structure (note: all JSON braces are doubled):
       "Duplicates: arr[i] = arr[j] handled correctly"
     ],
     "coverage_gaps": ["Does not specify stability of sort"],
-    "mathematical_validity": "Mathematically sound - proper universal quantification over valid index range",
-    "importance_category": "critical_correctness",
-    "selection_reasoning": "Primary property defining what it means to be sorted",
-    "robustness_assessment": "Highly robust - covers all orderings and edge cases"
+    "strength": "standard",
+    "category": "core_correctness"
   }}}}
 ]
 
 MANDATORY REQUIREMENTS:
 1. Use ACTUAL variable names from the function signature
-2. All scores must be between 0.0 and 1.0
-3. Include 3-5 specific items in edge_cases_covered
-4. Be honest about coverage_gaps
-5. importance_category must be one of: critical_correctness, essential_boundary, performance_guarantee, error_handling, completeness_check
-6. precise_translation should be 2-4 sentences explaining the formal logic in detail
-7. reasoning should explain WHY this postcondition matters (2-3 sentences)
+2. Include 3-5 specific items in edge_cases_covered
+3. Be honest about coverage_gaps (1-3 items)
+4. precise_translation should be 2-4 sentences explaining the formal logic in detail
+5. reasoning should explain WHY this postcondition matters (2-3 sentences)
+6. strength: minimal, standard, or comprehensive
+7. category: core_correctness, boundary_safety, error_resilience, performance_constraints, domain_compliance
 
 CRITICAL: Return ONLY the JSON array, no markdown, no explanations."""
 
@@ -368,7 +357,7 @@ Generate 6-10 DIVERSE postconditions as JSON array."""
         """
         Parse LLM response into EnhancedPostcondition objects.
         
-        ENHANCEMENT: Parses ALL 15+ rich fields from LLM response.
+        STREAMLINED: Parses ONLY rich content fields, NOT scoring/ranking fields.
         """
         postconditions = []
         
@@ -395,47 +384,30 @@ Generate 6-10 DIVERSE postconditions as JSON array."""
             # Parse each postcondition
             for i, pc_data in enumerate(data):
                 try:
-                    # Create postcondition with ALL fields
+                    # Create postcondition with STREAMLINED fields only
                     postcondition = EnhancedPostcondition(
-                        # Core fields (always present)
+                        # Core fields
                         formal_text=pc_data.get("formal_text", ""),
                         natural_language=pc_data.get("natural_language", ""),
-                        confidence_score=float(pc_data.get("confidence_score", 0.5)),
-                        edge_cases=pc_data.get("edge_cases", []),
-                        z3_theory=pc_data.get("z3_theory", "unknown"),
                         
-                        # NEW RICH FIELDS - Parse from LLM response
+                        # Rich explanation fields (KEPT)
                         precise_translation=pc_data.get("precise_translation", ""),
                         reasoning=pc_data.get("reasoning", ""),
                         
-                        # Edge case analysis
+                        # Edge case analysis (KEPT)
+                        edge_cases=pc_data.get("edge_cases", []),
                         edge_cases_covered=pc_data.get("edge_cases_covered", []),
                         coverage_gaps=pc_data.get("coverage_gaps", []),
                         
-                        # Quality metrics
-                        robustness_score=float(pc_data.get("robustness_score", 0.0)),
-                        mathematical_validity=pc_data.get("mathematical_validity", ""),
-                        clarity_score=float(pc_data.get("clarity_score", 0.0)),
-                        completeness_score=float(pc_data.get("completeness_score", 0.0)),
-                        testability_score=float(pc_data.get("testability_score", 0.0)),
-                        mathematical_quality_score=float(pc_data.get("mathematical_quality_score", 0.0)),
+                        # Z3 integration (KEPT)
+                        z3_theory=pc_data.get("z3_theory", "unknown"),
                         
-                        # Organization fields
-                        importance_category=pc_data.get("importance_category", "correctness"),
-                        organization_rank=int(pc_data.get("rank", i)),
-                        selection_reasoning=pc_data.get("selection_reasoning", ""),
-                        robustness_assessment=pc_data.get("robustness_assessment", ""),
+                        # Classification (KEPT)
+                        strength=pc_data.get("strength", "standard"),
+                        category=pc_data.get("category", "correctness")
                         
-                        # Optional fields
-                        assumptions=pc_data.get("assumptions", []),
-                        limitations=pc_data.get("limitations", []),
-                        verification_notes=pc_data.get("verification_notes", ""),
-                        warnings=pc_data.get("warnings", [])
-                    )
-                    
-                    # Calculate overall priority score
-                    postcondition.overall_priority_score = self._calculate_priority_score(
-                        postcondition
+                        # ❌ REMOVED: All scoring fields
+                        # ❌ REMOVED: All ranking fields
                     )
                     
                     postconditions.append(postcondition)
@@ -451,30 +423,6 @@ Generate 6-10 DIVERSE postconditions as JSON array."""
             logger.error(f"Failed to parse postconditions: {e}")
         
         return postconditions
-    
-    def _calculate_priority_score(self, pc: EnhancedPostcondition) -> float:
-        """
-        Calculate overall priority score from individual metrics.
-        
-        Weighted average:
-        - Confidence: 25%
-        - Robustness: 25%
-        - Clarity: 15%
-        - Completeness: 15%
-        - Testability: 10%
-        - Mathematical Quality: 10%
-        """
-        score = (
-            pc.confidence_score * 0.25 +
-            pc.robustness_score * 0.25 +
-            pc.clarity_score * 0.15 +
-            pc.completeness_score * 0.15 +
-            pc.testability_score * 0.10 +
-            pc.mathematical_quality_score * 0.10
-        )
-        
-        # Clamp to [0, 1]
-        return min(1.0, max(0.0, score))
     
     async def _fill_missing_translations(
         self,
@@ -497,7 +445,7 @@ Generate 6-10 DIVERSE postconditions as JSON array."""
                 )
         
         if translation_tasks:
-            logger.info(f"🔄 Generating {len(translation_tasks)} missing translations")
+            logger.info(f"Generating {len(translation_tasks)} missing translations")
             translations = await asyncio.gather(*translation_tasks)
             
             for idx, translation in zip(indices_to_fill, translations):
@@ -505,7 +453,7 @@ Generate 6-10 DIVERSE postconditions as JSON array."""
 
 
 # ============================================================================
-# FORMAL LOGIC TRANSLATION CHAIN
+# FORMAL LOGIC TRANSLATION CHAIN (UNCHANGED)
 # ============================================================================
 
 class FormalLogicTranslationChain:
@@ -575,17 +523,14 @@ Precise natural language translation:"""
 
 
 # ============================================================================
-# Z3 TRANSLATION CHAIN (WITH VALIDATION & BATCHING)
+# Z3 TRANSLATION CHAIN (UNCHANGED - Keeps validation & batching)
 # ============================================================================
 
 class Z3TranslationChain:
     """
     Translates postconditions to Z3 Python code with validation and batching.
     
-    ENHANCEMENTS:
-    - Validates generated Z3 code syntax
-    - Supports batch translation (multiple postconditions in one call)
-    - Adds validation metadata to translations
+    UNCHANGED: All Z3 functionality preserved.
     """
     
     def __init__(self, streaming: bool = False):
@@ -781,7 +726,7 @@ Return JSON array:"""
         if not postconditions:
             return []
         
-        logger.info(f"🔄 Batch translating {len(postconditions)} postconditions")
+        logger.info(f"Batch translating {len(postconditions)} postconditions")
         
         try:
             # Build JSON array of postconditions
@@ -809,13 +754,13 @@ Return JSON array:"""
             translations = self._parse_batch_response(result_text, postconditions)
             
             success_count = len([t for t in translations if t.translation_success])
-            logger.info(f"✅ Batch translation: {success_count}/{len(postconditions)} succeeded")
+            logger.info(f"Batch translation: {success_count}/{len(postconditions)} succeeded")
             
             return translations
         
         except Exception as e:
-            logger.error(f"❌ Batch Z3 translation failed: {e}")
-            logger.warning(f"⚠️ Falling back to individual translations")
+            logger.error(f"Batch Z3 translation failed: {e}")
+            logger.warning(f"Falling back to individual translations")
             return await self._fallback_individual_translations(
                 postconditions,
                 function_context
@@ -908,7 +853,7 @@ Return JSON array:"""
         
         This is slower but more reliable when batch translation fails.
         """
-        logger.info(f"🔄 Processing {len(postconditions)} individually")
+        logger.info(f"Processing {len(postconditions)} individually")
         
         tasks = [
             self.atranslate(pc, function_context)
@@ -932,7 +877,7 @@ Return JSON array:"""
                 results.append(t)
         
         success_count = sum(1 for r in results if r.translation_success)
-        logger.info(f"✅ Individual translations: {success_count}/{len(postconditions)} succeeded")
+        logger.info(f"Individual translations: {success_count}/{len(postconditions)} succeeded")
         
         return results
     
@@ -1018,17 +963,6 @@ Return JSON array:"""
             lines.append(f"Return: {context['return_type']}")
         
         return "\n".join(lines) if lines else "None"
-    
-    def _add_validation_header(self, translation: Z3Translation) -> str:
-        """Add validation status header to Z3 code."""
-        status = "✅ VALIDATED" if translation.z3_validation_passed else "❌ FAILED"
-        header = f"# {status}\n# Status: {translation.z3_validation_status}\n"
-        
-        if translation.validation_error:
-            header += f"# Error: {translation.validation_error}\n"
-        
-        header += "\n"
-        return header + translation.z3_code
 
 
 # ============================================================================
@@ -1087,46 +1021,43 @@ class ChainFactory:
 
 if __name__ == "__main__":
     print("=" * 80)
-    print(" CORE/CHAINS.PY - COMPLETE REWRITE")
+    print(" CORE/CHAINS.PY - STREAMLINED VERSION")
     print("=" * 80)
     
-    print("\n✅ FIXES:")
-    print("  1. ✅ Fixed template variable escaping bug (JSON braces)")
-    print("  2. ✅ Requests ALL rich fields from LLM (15+ new fields)")
-    print("  3. ✅ Parses ALL fields from LLM responses")
-    print("  4. ✅ Adds translation chain for precise_translation")
-    print("  5. ✅ Adds Z3 validation (syntax, imports, structure)")
-    print("  6. ✅ Batch Z3 translation support (87% fewer API calls)")
-    print("  7. ✅ Priority score calculation")
+    print("\nCHANGES FROM ORIGINAL:")
+    print("  ❌ Removed parsing of scoring fields")
+    print("     (confidence_score, robustness_score, clarity_score, etc.)")
+    print("  ❌ Removed parsing of ranking fields")
+    print("     (organization_rank, importance_category, selection_reasoning, etc.)")
+    print("  ❌ Removed _calculate_priority_score method")
     
-    print("\n📊 ENHANCEMENTS:")
-    print("  • PostconditionChain: Now requests and parses:")
-    print("    - precise_translation (detailed NL explanation)")
-    print("    - reasoning (WHY this postcondition matters)")
+    print("\nKEPT ALL VALUABLE FUNCTIONALITY:")
+    print("  ✅ Rich content parsing")
+    print("     (precise_translation, reasoning, edge_cases_covered, coverage_gaps)")
+    print("  ✅ Translation chain for precise_translation")
+    print("  ✅ Z3 validation (syntax, imports, structure)")
+    print("  ✅ Batch Z3 translation (87% fewer API calls)")
+    print("  ✅ All LangChain enhancements")
+    
+    print("\nFIELDS NOW POPULATED:")
+    print("  Before: 5 fields (formal_text, natural_language, confidence, etc.)")
+    print("  After:  9 fields (all rich content, NO scoring/ranking)")
+    print("    - formal_text")
+    print("    - natural_language")
+    print("    - precise_translation (detailed NL)")
+    print("    - reasoning (WHY it matters)")
     print("    - edge_cases_covered (specific cases)")
     print("    - coverage_gaps (honest limitations)")
-    print("    - Quality scores: robustness, clarity, completeness, etc.")
-    print("    - Organization: importance_category, selection_reasoning")
+    print("    - z3_theory")
+    print("    - strength (minimal/standard/comprehensive)")
+    print("    - category (core_correctness/boundary_safety/etc.)")
     
-    print("\n  • FormalLogicTranslationChain: NEW")
-    print("    - Translates formal logic to precise natural language")
-    print("    - Automatically fills missing translations")
-    
-    print("\n  • Z3TranslationChain: ENHANCED")
-    print("    - Validates generated Z3 code (syntax, imports)")
-    print("    - Batch translation: 10 postconditions = 1 API call")
-    print("    - Fallback to individual translation if batch fails")
-    
-    print("\n🎯 USAGE:")
+    print("\nUSAGE:")
     print("  factory = ChainFactory()")
     print("  postconditions = await factory.postcondition.agenerate(function, spec)")
     print("  translations = await factory.z3.atranslate_batch(postconditions)")
     
-    print("\n📝 FIELDS NOW POPULATED:")
-    print("  Before: 5 fields (formal_text, natural_language, confidence, etc.)")
-    print("  After:  25+ fields (all rich data from old system)")
-    
     print("\n" + "=" * 80)
-    print("🎉 This file is production-ready!")
-    print("   Replace your entire core/chains.py with this file.")
+    print("This streamlined version is production-ready!")
+    print("Replace your core/chains.py with this file.")
     print("=" * 80)

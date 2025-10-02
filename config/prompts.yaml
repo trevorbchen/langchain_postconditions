@@ -1,11 +1,20 @@
 # ============================================================================
-# COMPREHENSIVE PROMPT TEMPLATES - PHASE 2 MIGRATION COMPLETE
+# STREAMLINED PROMPTS - Surgical Removal of Scoring/Ranking Fields Only
 # ============================================================================
-# This is your ORIGINAL comprehensive prompts.yaml ENHANCED with new field requirements
-# Total additions: 8 new mandatory fields for postcondition generation
+# Based on comprehensive prompts.yaml (~900 lines)
+# 
+# ONLY THESE CHANGES:
+# 1. Removed scoring fields from postcondition JSON output example
+# 2. Removed ranking fields from postcondition JSON output example  
+# 3. Removed preconditions from pseudocode JSON output
+# 4. Updated CRITICAL REQUIREMENTS to not mention removed fields
+#
+# EVERYTHING ELSE UNCHANGED: All guidance, explanations, edge case analysis,
+# Z3 translation, domain knowledge, context building, validation, examples
+# ============================================================================
 
 # ============================================================================
-# PSEUDOCODE GENERATION PROMPTS (UNCHANGED - Already comprehensive)
+# PSEUDOCODE GENERATION PROMPTS
 # ============================================================================
 
 pseudocode_generation:
@@ -157,7 +166,7 @@ pseudocode_generation:
        - May need implementation
     
     ═══════════════════════════════════════════════════════════════════════════
-    OUTPUT FORMAT
+    OUTPUT FORMAT (STREAMLINED - removed preconditions field)
     ═══════════════════════════════════════════════════════════════════════════
     
     Respond with a JSON object containing:
@@ -193,11 +202,6 @@ pseudocode_generation:
               "description": "Specific error case"
             }}
           ],
-          "preconditions": [
-            "arr != NULL",
-            "size > 0",
-            "buffer has capacity for at least size elements"
-          ],
           "complexity": "O(n log n) time, O(log n) space",
           "memory_usage": "Input: O(n), Auxiliary: O(log n), Total: O(n)",
           "edge_cases": [
@@ -206,7 +210,7 @@ pseudocode_generation:
             "NULL pointer: returns error code",
             "Allocation failure: graceful degradation"
           ],
-          "body": "// Clear pseudocode with step numbers\n1. Check preconditions\n2. ..."
+          "body": "// Clear pseudocode with step numbers\n1. Check inputs\n2. ..."
         }}
       ],
       "structs": [
@@ -233,7 +237,7 @@ pseudocode_generation:
     Include ALL edge cases, proper error handling, and comprehensive documentation.
 
 # ============================================================================
-# POSTCONDITION GENERATION PROMPTS - ENHANCED WITH NEW FIELDS
+# POSTCONDITION GENERATION PROMPTS (STREAMLINED)
 # ============================================================================
 
 postcondition_generation:
@@ -245,41 +249,36 @@ postcondition_generation:
     - Mathematical logic, set theory, and formal methods
     
     ═══════════════════════════════════════════════════════════════════════════
-    🆕 CRITICAL: NEW OUTPUT FIELD REQUIREMENTS (PHASE 2 MIGRATION)
+    REQUIRED OUTPUT FIELDS
     ═══════════════════════════════════════════════════════════════════════════
     
-    You MUST now provide EIGHT ADDITIONAL FIELDS for EVERY postcondition:
+    You MUST provide these fields for EVERY postcondition:
     
-    1. **precise_translation** (2-5 sentences):
+    1. **formal_text**: Mathematical formal specification using proper notation
+    
+    2. **natural_language**: Clear one-sentence summary
+    
+    3. **precise_translation** (2-5 sentences):
        Detailed natural language translation of the formal text
        Example: "For every pair of indices i and j in the range from 0 to n..."
     
-    2. **reasoning** (3-5 sentences):
+    4. **reasoning** (3-5 sentences):
        WHY this postcondition matters - what bugs it prevents, what guarantees
        Example: "This ensures the fundamental sorting property holds..."
     
-    3. **edge_cases_covered** (3-7 specific items):
+    5. **edge_cases_covered** (3-7 specific items):
        Concrete edge cases this postcondition addresses
        Example: ["Empty array (n=0): trivially true", "Single element: no pairs"]
     
-    4. **coverage_gaps** (1-3 honest limitations):
+    6. **coverage_gaps** (1-3 honest limitations):
        What this postcondition does NOT guarantee
        Example: ["Does not specify stability", "No time complexity guarantee"]
     
-    5. **mathematical_validity** (1-2 sentences):
-       Assessment of mathematical correctness
-       Example: "Mathematically sound - proper universal quantification"
+    7. **z3_theory**: Z3 theory category (Arrays, Sequences, Arithmetic, etc.)
     
-    6. **robustness_assessment** (1-2 sentences):
-       How robust is this postcondition?
-       Example: "Highly robust - covers all orderings and handles duplicates"
+    8. **strength**: minimal, standard, or comprehensive
     
-    7. **importance_category** (string):
-       Classification: "critical_correctness", "essential_boundary", etc.
-    
-    8. **selection_reasoning** (1-2 sentences):
-       Why this postcondition should be selected
-       Example: "Primary property defining what it means to be sorted"
+    9. **category**: core_correctness, boundary_safety, error_resilience, etc.
     
     ═══════════════════════════════════════════════════════════════════════════
     FORMAL MATHEMATICAL NOTATION REQUIREMENTS
@@ -326,7 +325,7 @@ postcondition_generation:
        - Always use parentheses for function calls
     
     ═══════════════════════════════════════════════════════════════════════════
-    🆕 PRECISE_TRANSLATION FIELD REQUIREMENTS (NEW)
+    PRECISE_TRANSLATION FIELD REQUIREMENTS
     ═══════════════════════════════════════════════════════════════════════════
     
     The "precise_translation" field is CRITICAL for clarity. It must:
@@ -353,7 +352,7 @@ postcondition_generation:
                  is greater than any element that appears after it."
     
     ═══════════════════════════════════════════════════════════════════════════
-    🆕 REASONING FIELD REQUIREMENTS (NEW)
+    REASONING FIELD REQUIREMENTS
     ═══════════════════════════════════════════════════════════════════════════
     
     The "reasoning" field explains WHY this postcondition matters. It must answer:
@@ -378,7 +377,7 @@ postcondition_generation:
         important correctness property for any sorting algorithm."
     
     ═══════════════════════════════════════════════════════════════════════════
-    🆕 EDGE_CASES_COVERED FIELD REQUIREMENTS (NEW)
+    EDGE_CASES_COVERED FIELD REQUIREMENTS
     ═══════════════════════════════════════════════════════════════════════════
     
     List 3-7 SPECIFIC edge cases with EXPLANATIONS:
@@ -401,7 +400,7 @@ postcondition_generation:
        ]
     
     ═══════════════════════════════════════════════════════════════════════════
-    🆕 COVERAGE_GAPS FIELD REQUIREMENTS (NEW)
+    COVERAGE_GAPS FIELD REQUIREMENTS
     ═══════════════════════════════════════════════════════════════════════════
     
     Be HONEST about limitations. List 1-3 things NOT guaranteed:
@@ -566,50 +565,17 @@ postcondition_generation:
        - Example: Graph remains acyclic, tree stays balanced
     
     ═══════════════════════════════════════════════════════════════════════════
-    ROBUSTNESS SCORING CRITERIA
+    COMPLETE OUTPUT FORMAT (STREAMLINED - removed scoring/ranking fields)
     ═══════════════════════════════════════════════════════════════════════════
     
-    Rate postconditions 0.0-1.0 based on:
-    
-    1. **Edge Case Coverage** (30%):
-       - How many edge cases does it address?
-       - Are critical edge cases covered?
-    
-    2. **Mathematical Rigor** (25%):
-       - Is the formal statement precise?
-       - Are quantifiers used correctly?
-       - Is the logic sound?
-    
-    3. **Completeness** (20%):
-       - Does it fully specify the property?
-       - Are there unstated assumptions?
-       - Are all variables bounded?
-    
-    4. **Verifiability** (15%):
-       - Can Z3 efficiently verify this?
-       - Is the chosen theory appropriate?
-       - Are there decidability issues?
-    
-    5. **Practical Value** (10%):
-       - Does this catch real bugs?
-       - Is it useful for verification?
-       - Does it aid understanding?
-    
-    ═══════════════════════════════════════════════════════════════════════════
-    🆕 COMPLETE OUTPUT FORMAT - WITH ALL NEW FIELDS
-    ═══════════════════════════════════════════════════════════════════════════
-    
-    Generate 6-10 postconditions as a JSON array. EVERY postcondition MUST include ALL fields:
+    Generate 6-10 postconditions as a JSON array. EVERY postcondition MUST include these fields:
     
     [
       {{
         "formal_text": "∀i,j ∈ [0,n): i < j → arr[i] ≤ arr[j]",
         "natural_language": "Array is sorted in ascending order",
-        
         "precise_translation": "For every pair of indices i and j in the range from 0 to n (exclusive), if index i comes before index j (i < j), then the element at position i in the array must be less than or equal to the element at position j. This ensures complete ordering of all elements.",
-        
         "reasoning": "This is the fundamental correctness property for sorting. It prevents out-of-order elements which would break algorithms depending on sorted data (binary search, merging, etc.). Without this guarantee, the function would not be a valid sort. This property catches bugs in comparison logic and ensures completeness of the sorting process.",
-        
         "edge_cases_covered": [
           "Empty array (n=0): Universal quantification over empty set is vacuously true",
           "Single element (n=1): No pairs exist where i < j, trivially sorted",
@@ -617,47 +583,27 @@ postcondition_generation:
           "Already sorted: Postcondition still holds without changes",
           "All elements equal: Comparison allows equality throughout"
         ],
-        
         "coverage_gaps": [
           "Does not specify stability (relative order of equal elements)",
           "Does not guarantee in-place modification",
           "Does not specify time or space complexity"
         ],
-        
-        "mathematical_validity": "Mathematically sound - uses proper universal quantification with explicit domain bounds [0,n). Implication is correctly structured. Comparison operator ≤ handles all cases including equality.",
-        
-        "robustness_assessment": "Highly robust - covers all possible orderings (empty, single, sorted, reverse, random). Handles duplicates correctly. Mathematical formulation is precise and unambiguous.",
-        
         "strength": "standard",
         "category": "core_correctness",
-        "confidence_score": 0.98,
-        "clarity_score": 0.95,
-        "completeness_score": 0.90,
-        "testability_score": 0.95,
-        "robustness_score": 0.92,
-        "mathematical_quality_score": 0.96,
-        "z3_theory": "arrays",
-        
-        "importance_category": "critical_correctness",
-        "organization_rank": 1,
-        "is_primary_in_category": true,
-        "recommended_for_selection": true,
-        "selection_reasoning": "This is the primary correctness property that defines what it means for an array to be sorted. All other properties are secondary or derived from this fundamental guarantee."
+        "z3_theory": "arrays"
       }}
     ]
     
     CRITICAL REQUIREMENTS:
     - Generate 6-10 diverse postconditions covering different aspects
-    - Include ALL fields (especially the 8 new ones) for EVERY postcondition
+    - Include ALL required fields for EVERY postcondition
     - precise_translation: 2-5 sentences, translate every component
     - reasoning: 3-5 sentences, explain WHY it matters
     - edge_cases_covered: 3-7 specific items with explanations
     - coverage_gaps: 1-3 honest limitations
-    - mathematical_validity: 1-2 sentences assessing correctness
-    - robustness_assessment: 1-2 sentences on robustness
-    - Calculate ALL scores (0.0-1.0)
     - Use ACTUAL variable names from function signature
     - Prefer Z3-efficient theories (LIA, LRA, Arrays, EUF)
+    - Do NOT include: confidence_score, robustness_score, clarity_score, completeness_score, testability_score, mathematical_quality_score, mathematical_validity, robustness_assessment, organization_rank, importance_category, selection_reasoning, is_primary_in_category, recommended_for_selection
 
   human: |
     SPECIFICATION: {specification}
@@ -677,7 +623,7 @@ postcondition_generation:
     Generate ROBUST, COMPREHENSIVE postconditions with ALL required fields following the format above.
 
 # ============================================================================
-# EDGE CASE ANALYSIS PROMPTS (UNCHANGED - Already comprehensive)
+# EDGE CASE ANALYSIS PROMPTS (UNCHANGED)
 # ============================================================================
 
 edge_case_analysis:
@@ -804,7 +750,7 @@ edge_case_analysis:
     Identify ALL edge cases with CRITICAL severity focus.
 
 # ============================================================================
-# Z3 TRANSLATION PROMPTS (UNCHANGED - Already comprehensive)
+# Z3 TRANSLATION PROMPTS (UNCHANGED)
 # ============================================================================
 
 z3_translation:
@@ -952,18 +898,10 @@ z3_translation:
     postcondition = # Your constraint here
     
     # =============================================================================
-    # PRECONDITIONS (if any)
-    # =============================================================================
-    
-    # Add any preconditions that must hold
-    precondition = # Your precondition here
-    
-    # =============================================================================
     # SOLVER AND VERIFICATION
     # =============================================================================
     
     s = Solver()
-    s.add(precondition)
     s.add(postcondition)
     
     result = s.check()
@@ -975,10 +913,8 @@ z3_translation:
         print(m)
     elif result == unsat:
         print("✗ Postcondition is UNSATISFIABLE")
-        print("This indicates the postcondition cannot be satisfied under the preconditions")
     else:
         print("? Verification UNKNOWN")
-        print("Z3 could not determine satisfiability (may need different tactics)")
     
     # =============================================================================
     # ADDITIONAL TESTING (optional)
@@ -1014,7 +950,7 @@ z3_translation:
     Generate COMPLETE, EXECUTABLE Z3 Python code following ALL requirements above.
 
 # ============================================================================
-# DOMAIN KNOWLEDGE TEMPLATES (UNCHANGED - Already comprehensive)
+# DOMAIN KNOWLEDGE TEMPLATES (UNCHANGED)
 # ============================================================================
 
 domain_knowledge:
@@ -1142,7 +1078,7 @@ domain_knowledge:
       - "Use induction for recursive algorithms"
 
 # ============================================================================
-# CONTEXT BUILDING TEMPLATES (UNCHANGED - Already comprehensive)
+# CONTEXT BUILDING TEMPLATES (UNCHANGED)
 # ============================================================================
 
 context_building:
@@ -1152,13 +1088,9 @@ context_building:
     ═══════════════════════════════════════════════════════════════════════════
     
     {function_signature}
-    
     {edge_case_analysis}
-    
     {domain_knowledge}
-    
     {z3_theory_guidance}
-    
     {examples}
   
   function_signature_template: |
@@ -1177,9 +1109,6 @@ context_building:
     
     Return Values:
     {return_values}
-    
-    Preconditions:
-    {preconditions}
     
     CRITICAL: Use actual parameter names in formal postconditions:
     - Input: {input_names}
@@ -1313,7 +1242,6 @@ validation:
        - Is the syntax valid?
     
     3. **Completeness**:
-       - Are preconditions included?
        - Are helper functions defined?
        - Is the solver properly configured?
     
@@ -1372,7 +1300,7 @@ examples:
       
       # Solver
       s = Solver()
-      s.add(n > 0)  # Precondition
+      s.add(n > 0)
       s.add(sorted_constraint)
       
       assert s.check() == sat
@@ -1397,24 +1325,3 @@ examples:
           - "Empty array: returns -1"
           - "Target not present: returns -1"
           - "Multiple occurrences: finds one"
-
-# ============================================================================
-# PHASE 2 MIGRATION SUMMARY
-# ============================================================================
-
-migration_notes: |
-  ✅ PHASE 2 COMPLETE: Enhanced prompts.yaml with ALL new field requirements
-  
-  Changes made to postcondition_generation section:
-  1. Added "NEW OUTPUT FIELD REQUIREMENTS" section listing 8 mandatory fields
-  2. Added "PRECISE_TRANSLATION FIELD REQUIREMENTS" with examples
-  3. Added "REASONING FIELD REQUIREMENTS" with guidelines
-  4. Added "EDGE_CASES_COVERED FIELD REQUIREMENTS" with format
-  5. Added "COVERAGE_GAPS FIELD REQUIREMENTS" for honesty
-  6. Updated JSON output format to show ALL fields including new ones
-  7. Added complete example with all 8 new fields populated
-  
-  All other sections (pseudocode, edge_case, z3_translation, domain_knowledge, 
-  context_building, validation, examples) remain unchanged from original.
-  
-  Next step: Update core/chains.py to parse these new fields from LLM responses.

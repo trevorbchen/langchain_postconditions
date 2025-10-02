@@ -1,0 +1,282 @@
+{
+  "session_id": "ac0043d3-6d5f-4acb-bdb4-f8d3a7d07897",
+  "specification": "make an algorithm that finds the minimum of an array",
+  "pseudocode_result": {
+    "functions": [
+      {
+        "name": "find_min",
+        "description": "Finds the minimum value in an array",
+        "signature": "int find_min(int* array, int size)",
+        "input_parameters": [
+          {
+            "name": "array",
+            "data_type": "int*",
+            "description": "The array to find the minimum value in"
+          },
+          {
+            "name": "size",
+            "data_type": "int",
+            "description": "The size of the array"
+          }
+        ],
+        "output_parameters": [],
+        "return_values": [
+          {
+            "condition": "success",
+            "value": "minimum value",
+            "description": "The minimum value in the array",
+            "name": "result"
+          },
+          {
+            "condition": "failure",
+            "value": "INT_MAX",
+            "description": "If the array is empty or NULL",
+            "name": "result"
+          }
+        ],
+        "return_type": "int",
+        "edge_cases": [
+          "Empty array",
+          "NULL pointer",
+          "Single element"
+        ],
+        "complexity": "O(n)",
+        "memory_usage": "O(1)",
+        "body": "Initialize a variable min with the maximum possible int value. Iterate over the array. If the current element is less than min, update min. Return min.",
+        "dependencies": []
+      }
+    ],
+    "structs": [],
+    "enums": [],
+    "global_variables": [],
+    "includes": [
+      "stdio.h",
+      "limits.h"
+    ],
+    "dependencies": [],
+    "metadata": {}
+  },
+  "function_results": [
+    {
+      "function_name": "find_min",
+      "function_signature": "int find_min(int* array, int size)",
+      "function_description": "Finds the minimum value in an array",
+      "pseudocode": {
+        "name": "find_min",
+        "description": "Finds the minimum value in an array",
+        "signature": "int find_min(int* array, int size)",
+        "input_parameters": [
+          {
+            "name": "array",
+            "data_type": "int*",
+            "description": "The array to find the minimum value in"
+          },
+          {
+            "name": "size",
+            "data_type": "int",
+            "description": "The size of the array"
+          }
+        ],
+        "output_parameters": [],
+        "return_values": [
+          {
+            "condition": "success",
+            "value": "minimum value",
+            "description": "The minimum value in the array",
+            "name": "result"
+          },
+          {
+            "condition": "failure",
+            "value": "INT_MAX",
+            "description": "If the array is empty or NULL",
+            "name": "result"
+          }
+        ],
+        "return_type": "int",
+        "edge_cases": [
+          "Empty array",
+          "NULL pointer",
+          "Single element"
+        ],
+        "complexity": "O(n)",
+        "memory_usage": "O(1)",
+        "body": "Initialize a variable min with the maximum possible int value. Iterate over the array. If the current element is less than min, update min. Return min.",
+        "dependencies": []
+      },
+      "postconditions": [
+        {
+          "formal_text": "∀i: 0 ≤ i < size → array[i] ≥ find_min(array, size)",
+          "natural_language": "The returned value is less than or equal to all elements in the array",
+          "strength": "standard",
+          "category": "core_correctness",
+          "precise_translation": "For every index i in the range from 0 to size, the element at position i in the array is greater than or equal to the value returned by the function find_min",
+          "reasoning": "This ensures that the function correctly identifies the minimum value in the array",
+          "edge_cases": [
+            "empty array",
+            "NULL pointer",
+            "single element"
+          ],
+          "edge_cases_covered": [
+            "Empty array (size=0): vacuously true",
+            "NULL pointer: not covered by this postcondition",
+            "Single element (size=1): the single element is the minimum"
+          ],
+          "coverage_gaps": [
+            "Does not handle NULL pointers",
+            "Does not specify behavior for empty arrays"
+          ],
+          "z3_theory": "arrays",
+          "z3_translation": {
+            "formal_text": "∀i: 0 ≤ i < size → array[i] ≥ find_min(array, size)",
+            "natural_language": "The returned value is less than or equal to all elements in the array",
+            "z3_code": "from z3 import *\n\narray = Array('array', IntSort(), IntSort())\nsize = Int('size')\nfind_min = Function('find_min', ArraySort(IntSort(), IntSort()), IntSort(), IntSort())\ni = Int('i')\ns = Solver()\ns.add(ForAll(i, Implies(And(i >= 0, i < size), array[i] >= find_min(array, size))))\nprint(s.check())",
+            "z3_theory_used": "arrays",
+            "translation_success": true,
+            "translation_time": 0.0,
+            "z3_validation_passed": true,
+            "z3_validation_status": "success",
+            "validation_error": null,
+            "error_type": null,
+            "error_line": null,
+            "validation_warnings": [],
+            "solver_created": false,
+            "constraints_added": 0,
+            "variables_declared": 0,
+            "execution_time": 0.0,
+            "z3_ast": null,
+            "tokens": null,
+            "custom_functions": [],
+            "declared_sorts": [],
+            "declared_variables": {},
+            "warnings": [],
+            "generated_at": "2025-10-02T14:54:49.551624"
+          },
+          "warnings": []
+        },
+        {
+          "formal_text": "size > 0 → ∃i: 0 ≤ i < size ∧ array[i] = find_min(array, size)",
+          "natural_language": "If the array is not empty, there exists an element in the array equal to the returned value",
+          "strength": "standard",
+          "category": "core_correctness",
+          "precise_translation": "If the size of the array is greater than 0, there exists an index i in the range from 0 to size such that the element at position i in the array is equal to the value returned by the function find_min",
+          "reasoning": "This ensures that the function does not return a value that is not in the array",
+          "edge_cases": [
+            "empty array",
+            "NULL pointer",
+            "single element"
+          ],
+          "edge_cases_covered": [
+            "Empty array (size=0): the implication is vacuously true",
+            "NULL pointer: not covered by this postcondition",
+            "Single element (size=1): the single element is the minimum"
+          ],
+          "coverage_gaps": [
+            "Does not handle NULL pointers",
+            "Does not specify behavior for empty arrays"
+          ],
+          "z3_theory": "arrays",
+          "z3_translation": {
+            "formal_text": "size > 0 → ∃i: 0 ≤ i < size ∧ array[i] = find_min(array, size)",
+            "natural_language": "If the array is not empty, there exists an element in the array equal to the returned value",
+            "z3_code": "from z3 import *\n\narray = Array('array', IntSort(), IntSort())\nsize = Int('size')\nfind_min = Function('find_min', ArraySort(IntSort(), IntSort()), IntSort(), IntSort())\ni = Int('i')\ns = Solver()\ns.add(Implies(size > 0, Exists(i, And(i >= 0, i < size, array[i] == find_min(array, size)))))\nprint(s.check())",
+            "z3_theory_used": "arrays",
+            "translation_success": true,
+            "translation_time": 0.0,
+            "z3_validation_passed": true,
+            "z3_validation_status": "success",
+            "validation_error": null,
+            "error_type": null,
+            "error_line": null,
+            "validation_warnings": [],
+            "solver_created": false,
+            "constraints_added": 0,
+            "variables_declared": 0,
+            "execution_time": 0.0,
+            "z3_ast": null,
+            "tokens": null,
+            "custom_functions": [],
+            "declared_sorts": [],
+            "declared_variables": {},
+            "warnings": [],
+            "generated_at": "2025-10-02T14:54:49.551624"
+          },
+          "warnings": []
+        },
+        {
+          "formal_text": "size ≤ 0 → find_min(array, size) = -1",
+          "natural_language": "If the array is empty or the size is not positive, the function returns -1",
+          "strength": "standard",
+          "category": "error_resilience",
+          "precise_translation": "If the size of the array is less than or equal to 0, the value returned by the function find_min is -1",
+          "reasoning": "This provides a way to handle empty arrays and invalid sizes",
+          "edge_cases": [
+            "empty array",
+            "NULL pointer",
+            "negative size"
+          ],
+          "edge_cases_covered": [
+            "Empty array (size=0): returns -1",
+            "NULL pointer: not covered by this postcondition",
+            "Negative size: returns -1"
+          ],
+          "coverage_gaps": [
+            "Does not handle NULL pointers"
+          ],
+          "z3_theory": "arithmetic",
+          "z3_translation": {
+            "formal_text": "size ≤ 0 → find_min(array, size) = -1",
+            "natural_language": "If the array is empty or the size is not positive, the function returns -1",
+            "z3_code": "from z3 import *\n\narray = Array('array', IntSort(), IntSort())\nsize = Int('size')\nfind_min = Function('find_min', ArraySort(IntSort(), IntSort()), IntSort(), IntSort())\ns = Solver()\ns.add(Implies(size <= 0, find_min(array, size) == -1))\nprint(s.check())",
+            "z3_theory_used": "arithmetic",
+            "translation_success": true,
+            "translation_time": 0.0,
+            "z3_validation_passed": true,
+            "z3_validation_status": "success",
+            "validation_error": null,
+            "error_type": null,
+            "error_line": null,
+            "validation_warnings": [],
+            "solver_created": false,
+            "constraints_added": 0,
+            "variables_declared": 0,
+            "execution_time": 0.0,
+            "z3_ast": null,
+            "tokens": null,
+            "custom_functions": [],
+            "declared_sorts": [],
+            "declared_variables": {},
+            "warnings": [],
+            "generated_at": "2025-10-02T14:54:49.551624"
+          },
+          "warnings": []
+        }
+      ],
+      "postcondition_count": 3,
+      "z3_translations_count": 3,
+      "z3_validations_passed": 3,
+      "z3_validations_failed": 0,
+      "z3_validation_errors": [],
+      "average_solver_creation_rate": 0.0,
+      "average_constraints_per_code": 0.0,
+      "average_variables_per_code": 0.0,
+      "total_edge_cases_covered": 0,
+      "status": "not_started",
+      "error_message": null,
+      "processing_time": 0.0
+    }
+  ],
+  "total_functions": 1,
+  "total_postconditions": 3,
+  "total_z3_translations": 3,
+  "z3_validation_success_rate": 1.0,
+  "solver_creation_rate": 0.0,
+  "status": "failed",
+  "errors": [
+    "Error generating postconditions for find_min: 'EnhancedPostcondition' object has no attribute 'overall_quality_score'",
+    "'FunctionResult' object has no attribute 'average_quality_score'"
+  ],
+  "warnings": [],
+  "started_at": "2025-10-02T14:54:02.528194",
+  "completed_at": null,
+  "total_processing_time": 0.0
+}

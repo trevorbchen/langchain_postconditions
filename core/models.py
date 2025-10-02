@@ -1,12 +1,17 @@
 """
 Pydantic Data Models for Postcondition Generation System
 
-PHASE 4 COMPLETE: Enhanced Z3Translation with Runtime Validation Fields
-- Added error_type and error_line fields (from validator)
-- Added solver_created, constraints_added, variables_declared (execution metrics)
-- Added validation_warnings for non-fatal issues
-- Enhanced execution_time tracking
-- All fields now populated by Z3CodeValidator
+STREAMLINED VERSION - Removed:
+❌ is_pointer, is_array, is_const from FunctionParameter
+❌ preconditions from Function model
+❌ All scoring fields from EnhancedPostcondition
+❌ All ranking/organization fields from EnhancedPostcondition
+
+KEPT - Phase 4 Complete:
+✅ Rich explanations (precise_translation, reasoning)
+✅ Edge case analysis (edge_cases_covered, coverage_gaps)
+✅ Z3 validation with runtime metrics
+✅ All Phase 4 execution tracking fields
 """
 
 from typing import List, Optional, Dict, Any, Union
@@ -50,17 +55,18 @@ class ProcessingStatus(str, Enum):
 
 
 # ============================================================================
-# FUNCTION MODELS
+# FUNCTION MODELS (STREAMLINED)
 # ============================================================================
 
 class FunctionParameter(BaseModel):
-    """Represents a function parameter."""
+    """
+    Represents a function parameter.
+    
+    ❌ REMOVED: is_pointer, is_array, is_const
+    """
     name: str
     data_type: str
     description: str = ""
-    is_pointer: bool = False
-    is_array: bool = False
-    is_const: bool = False
     
     @field_validator('data_type')
     @classmethod
@@ -87,7 +93,11 @@ class Dependency(BaseModel):
 
 
 class Function(BaseModel):
-    """Represents a C function with full specification."""
+    """
+    Represents a C function with full specification.
+    
+    ❌ REMOVED: preconditions field
+    """
     name: str
     description: str
     signature: str = ""
@@ -97,7 +107,6 @@ class Function(BaseModel):
     return_values: List[ReturnValue] = []
     return_type: str = "void"
     
-    preconditions: List[str] = []
     edge_cases: List[str] = []
     
     complexity: str = "O(n)"
@@ -142,75 +151,86 @@ class PseudocodeResult(BaseModel):
 
 
 # ============================================================================
-# ENHANCED POSTCONDITION MODEL
+# ENHANCED POSTCONDITION MODEL (STREAMLINED)
 # ============================================================================
 
 class EnhancedPostcondition(BaseModel):
     """
     Enhanced postcondition with comprehensive metadata.
     
-    MIGRATION COMPLETE: All fields from original system restored.
+    STREAMLINED VERSION - Removed ALL scoring and ranking fields:
+    ❌ confidence_score, robustness_score, clarity_score
+    ❌ completeness_score, testability_score, mathematical_quality_score
+    ❌ overall_priority_score
+    ❌ mathematical_validity
+    ❌ organization_rank, importance_category
+    ❌ selection_reasoning, robustness_assessment
+    ❌ is_primary_in_category, recommended_for_selection
+    
+    KEPT - Core functionality:
+    ✅ formal_text, natural_language
+    ✅ precise_translation, reasoning (rich explanations)
+    ✅ edge_cases_covered, coverage_gaps (edge case analysis)
+    ✅ z3_theory, z3_translation (Z3 integration)
     """
     
-    # Core fields
+    # ========================================================================
+    # CORE FIELDS
+    # ========================================================================
     formal_text: str = Field(description="Mathematical formal specification")
     natural_language: str = Field(description="Brief natural language explanation")
     
     strength: PostconditionStrength = PostconditionStrength.STANDARD
     category: PostconditionCategory = PostconditionCategory.CORRECTNESS
     
-    # Translation fields
-    precise_translation: str = Field(default="", description="Detailed natural language translation")
-    reasoning: str = Field(default="", description="WHY this postcondition is necessary")
+    # ========================================================================
+    # RICH EXPLANATIONS (KEPT)
+    # ========================================================================
+    precise_translation: str = Field(
+        default="", 
+        description="Detailed natural language translation of formal logic"
+    )
+    reasoning: str = Field(
+        default="", 
+        description="WHY this postcondition is necessary and what it ensures"
+    )
     
-    # Edge case analysis
-    edge_cases: List[str] = Field(default=[], description="Edge cases to consider")
-    edge_cases_covered: List[str] = Field(default=[], description="Edge cases explicitly handled")
-    coverage_gaps: List[str] = Field(default=[], description="Known coverage limitations")
+    # ========================================================================
+    # EDGE CASE ANALYSIS (KEPT)
+    # ========================================================================
+    edge_cases: List[str] = Field(
+        default=[], 
+        description="Edge cases to consider (general)"
+    )
+    edge_cases_covered: List[str] = Field(
+        default=[], 
+        description="Specific edge cases explicitly handled"
+    )
+    coverage_gaps: List[str] = Field(
+        default=[], 
+        description="Known coverage limitations or scenarios not addressed"
+    )
     
-    # Quality metrics
-    confidence_score: float = Field(default=0.5, ge=0.0, le=1.0)
-    robustness_score: float = Field(default=0.0, ge=0.0, le=1.0)
-    clarity_score: float = Field(default=0.0, ge=0.0, le=1.0)
-    completeness_score: float = Field(default=0.0, ge=0.0, le=1.0)
-    testability_score: float = Field(default=0.0, ge=0.0, le=1.0)
-    mathematical_quality_score: float = Field(default=0.0, ge=0.0, le=1.0)
-    overall_priority_score: float = Field(default=0.0, ge=0.0, le=1.0)
-    
-    # Mathematical validation
-    mathematical_validity: str = Field(default="", description="Mathematical correctness assessment")
-    
-    # Organization and ranking
-    organization_rank: int = Field(default=0, description="Priority ranking")
-    importance_category: str = Field(default="", description="Category of importance")
-    selection_reasoning: str = Field(default="", description="Why this was selected")
-    robustness_assessment: str = Field(default="", description="Robustness evaluation")
-    is_primary_in_category: bool = Field(default=False)
-    recommended_for_selection: bool = Field(default=True)
-    
-    # Z3 information
-    z3_theory: str = Field(default="unknown", description="Z3 theory category")
+    # ========================================================================
+    # Z3 INTEGRATION (KEPT)
+    # ========================================================================
+    z3_theory: str = Field(
+        default="unknown", 
+        description="Z3 theory category (Arrays, Sequences, Arithmetic, etc.)"
+    )
     z3_translation: Optional['Z3Translation'] = None
     
-    # Warnings and notes
-    warnings: List[str] = Field(default=[], description="Warnings or caveats")
+    # ========================================================================
+    # WARNINGS (KEPT)
+    # ========================================================================
+    warnings: List[str] = Field(
+        default=[], 
+        description="Warnings or caveats about this postcondition"
+    )
     
-    @property
-    def overall_quality_score(self) -> float:
-        """Calculate overall quality score."""
-        if self.clarity_score == 0 and self.completeness_score == 0:
-            return self.confidence_score
-        
-        scores = [
-            (self.confidence_score, 0.3),
-            (self.clarity_score, 0.2),
-            (self.completeness_score, 0.2),
-            (self.testability_score, 0.15),
-            (self.robustness_score, 0.15)
-        ]
-        
-        weighted_sum = sum(score * weight for score, weight in scores)
-        return min(1.0, weighted_sum)
+    # ========================================================================
+    # COMPUTED PROPERTIES (SIMPLIFIED)
+    # ========================================================================
     
     @property
     def has_translations(self) -> bool:
@@ -224,10 +244,15 @@ class EnhancedPostcondition(BaseModel):
         if total == 0:
             return 0.0
         return len(self.edge_cases_covered) / total
+    
+    @property
+    def has_z3_translation(self) -> bool:
+        """Check if Z3 translation is available."""
+        return self.z3_translation is not None
 
 
 # ============================================================================
-# ENHANCED Z3 TRANSLATION MODEL - PHASE 4 COMPLETE
+# ENHANCED Z3 TRANSLATION MODEL - PHASE 4 COMPLETE (UNCHANGED)
 # ============================================================================
 
 class Z3Translation(BaseModel):
@@ -236,12 +261,7 @@ class Z3Translation(BaseModel):
     
     PHASE 4 COMPLETE: Enhanced with runtime validation fields from Z3CodeValidator.
     
-    New fields track:
-    - Runtime execution results
-    - Solver creation and usage
-    - Constraint and variable counts
-    - Detailed error information with types and line numbers
-    - Execution timing
+    This model is UNCHANGED - all Phase 4 validation fields are kept.
     """
     
     formal_text: str
@@ -260,7 +280,7 @@ class Z3Translation(BaseModel):
     translation_time: float = 0.0
     
     # ========================================================================
-    # VALIDATION FIELDS (Enhanced in Phase 4)
+    # VALIDATION FIELDS (Phase 4 - KEPT)
     # ========================================================================
     z3_validation_passed: bool = Field(
         default=False,
@@ -277,7 +297,6 @@ class Z3Translation(BaseModel):
         description="Error message if validation failed"
     )
     
-    # 🆕 PHASE 4: Enhanced error information
     error_type: Optional[str] = Field(
         default=None,
         description="Type of error: SyntaxError, ImportError, NameError, TypeError, TimeoutError, etc."
@@ -290,11 +309,11 @@ class Z3Translation(BaseModel):
     
     validation_warnings: List[str] = Field(
         default=[],
-        description="Non-fatal warnings from validation (replaces 'warnings')"
+        description="Non-fatal warnings from validation"
     )
     
     # ========================================================================
-    # EXECUTION METRICS (NEW in Phase 4)
+    # EXECUTION METRICS (Phase 4 - KEPT)
     # ========================================================================
     solver_created: bool = Field(
         default=False,
@@ -320,7 +339,7 @@ class Z3Translation(BaseModel):
     )
     
     # ========================================================================
-    # ANALYSIS METADATA (Restored from original system)
+    # ANALYSIS METADATA (KEPT)
     # ========================================================================
     z3_ast: Optional[Dict[str, Any]] = Field(
         default=None,
@@ -425,11 +444,15 @@ class Z3Translation(BaseModel):
 
 
 # ============================================================================
-# PIPELINE RESULT MODELS (Enhanced)
+# PIPELINE RESULT MODELS (STREAMLINED)
 # ============================================================================
 
 class FunctionResult(BaseModel):
-    """Result for a single function's postcondition generation."""
+    """
+    Result for a single function's postcondition generation.
+    
+    STREAMLINED: Removed quality scoring aggregates, kept Z3 validation metrics.
+    """
     
     function_name: str
     function_signature: str
@@ -440,13 +463,7 @@ class FunctionResult(BaseModel):
     postconditions: List[EnhancedPostcondition] = []
     postcondition_count: int = 0
     
-    # Quality metrics (Phase 3 enhancements)
-    average_quality_score: float = 0.0
-    average_robustness_score: float = 0.0
-    edge_case_coverage_score: float = 0.0
-    mathematical_validity_rate: float = 0.0
-    
-    # Z3 translation stats (Phase 4 enhancements)
+    # Z3 translation stats (Phase 4 - useful for validation tracking)
     z3_translations_count: int = 0
     z3_validations_passed: int = 0
     z3_validations_failed: int = 0
@@ -455,6 +472,9 @@ class FunctionResult(BaseModel):
     average_constraints_per_code: float = 0.0
     average_variables_per_code: float = 0.0
     
+    # Simple edge case count (useful metric)
+    total_edge_cases_covered: int = 0
+    
     # Status
     status: ProcessingStatus = ProcessingStatus.NOT_STARTED
     error_message: Optional[str] = None
@@ -462,7 +482,11 @@ class FunctionResult(BaseModel):
 
 
 class CompleteEnhancedResult(BaseModel):
-    """Complete result from the pipeline."""
+    """
+    Complete result from the pipeline.
+    
+    STREAMLINED: Removed quality scoring aggregates, kept Z3 validation stats.
+    """
     
     session_id: str
     specification: str
@@ -471,16 +495,12 @@ class CompleteEnhancedResult(BaseModel):
     pseudocode_result: Optional[PseudocodeResult] = None
     function_results: List[FunctionResult] = []
     
-    # Statistics (Phase 3-4 enhancements)
+    # Statistics
     total_functions: int = 0
     total_postconditions: int = 0
     total_z3_translations: int = 0
     
-    average_quality_score: float = 0.0
-    average_robustness_score: float = 0.0
-    average_validation_score: float = 0.0
-    
-    # 🆕 PHASE 5: Z3 validation statistics
+    # Z3 validation statistics (Phase 4 - useful for tracking)
     z3_validation_success_rate: float = 0.0
     solver_creation_rate: float = 0.0
     
@@ -496,111 +516,67 @@ class CompleteEnhancedResult(BaseModel):
 
 
 # ============================================================================
-# MODEL VALIDATION HELPERS
+# VALIDATION HELPER
 # ============================================================================
 
-def validate_migration():
-    """
-    Validate that all fields from the original system are present.
+def validate_streamlined_migration():
+    """Validate that streamlined model has correct fields."""
+    print("\nValidating Streamlined Models...")
     
-    Checks EnhancedPostcondition and Z3Translation for completeness.
-    """
-    print("\n🔍 Validating Enhanced Models...")
-    
-    # Check EnhancedPostcondition fields
-    required_postcondition_fields = [
+    # Fields that SHOULD exist
+    required_fields = [
         'formal_text', 'natural_language', 'precise_translation', 'reasoning',
-        'edge_cases_covered', 'coverage_gaps', 'robustness_score',
-        'mathematical_validity', 'organization_rank', 'importance_category'
+        'edge_cases_covered', 'coverage_gaps', 'z3_theory'
+    ]
+    
+    # Fields that should NOT exist
+    removed_fields = [
+        'confidence_score', 'robustness_score', 'clarity_score',
+        'completeness_score', 'testability_score', 'mathematical_quality_score',
+        'overall_priority_score', 'mathematical_validity',
+        'organization_rank', 'importance_category', 'selection_reasoning',
+        'robustness_assessment', 'is_primary_in_category'
     ]
     
     postcondition_fields = set(EnhancedPostcondition.model_fields.keys())
-    missing = [f for f in required_postcondition_fields if f not in postcondition_fields]
+    
+    missing = [f for f in required_fields if f not in postcondition_fields]
+    still_present = [f for f in removed_fields if f in postcondition_fields]
     
     if missing:
-        print(f"❌ Missing EnhancedPostcondition fields: {missing}")
-    else:
-        print(f"✅ EnhancedPostcondition has all {len(required_postcondition_fields)} required fields")
+        print(f"Missing required fields: {missing}")
+        return False
     
-    # Check Z3Translation fields (Phase 4)
-    required_z3_fields = [
-        'z3_validation_passed', 'z3_validation_status', 'validation_error',
-        'error_type', 'error_line', 'solver_created', 'constraints_added',
-        'variables_declared', 'execution_time', 'validation_warnings'
-    ]
+    if still_present:
+        print(f"Fields should be removed but still present: {still_present}")
+        return False
     
-    z3_fields = set(Z3Translation.model_fields.keys())
-    missing_z3 = [f for f in required_z3_fields if f not in z3_fields]
+    print(f"All {len(required_fields)} required fields present")
+    print(f"All {len(removed_fields)} unwanted fields successfully removed")
     
-    if missing_z3:
-        print(f"❌ Missing Z3Translation fields: {missing_z3}")
-    else:
-        print(f"✅ Z3Translation has all {len(required_z3_fields)} validation fields (Phase 4)")
-    
-    return len(missing) == 0 and len(missing_z3) == 0
+    return True
 
-
-# ============================================================================
-# MAIN - TESTING
-# ============================================================================
 
 if __name__ == "__main__":
     print("=" * 80)
-    print("PHASE 4 COMPLETE - Enhanced Models with Runtime Validation")
+    print("STREAMLINED MODELS - Ready for Production")
     print("=" * 80)
     
-    # Validate migration
-    print("\n📋 Checking Phase 4 completeness...")
-    all_fields_present = validate_migration()
+    validation_passed = validate_streamlined_migration()
     
-    if all_fields_present:
-        print("\n✅ All required fields present!")
+    if validation_passed:
+        print("\nSTREAMLINED MIGRATION SUCCESSFUL!")
+        print("\nRemoved:")
+        print("  - All scoring fields (7 fields)")
+        print("  - All ranking fields (6 fields)")
+        print("  - is_pointer, is_array, is_const from FunctionParameter")
+        print("  - preconditions from Function")
+        print("\nKept:")
+        print("  - Rich explanations (precise_translation, reasoning)")
+        print("  - Edge case analysis (edge_cases_covered, coverage_gaps)")
+        print("  - Z3 integration (z3_theory, z3_translation)")
+        print("  - All Phase 4 validation fields")
     else:
-        print("\n⚠️ Some fields missing - check output above")
+        print("\nVALIDATION FAILED - Check output above")
     
-    # Example: Create Z3 translation with Phase 4 fields
-    print("\n📝 Creating Z3Translation with Phase 4 validation fields...")
-    
-    translation = Z3Translation(
-        formal_text="∀i,j: 0 ≤ i < j < n → arr[i] ≤ arr[j]",
-        natural_language="Array is sorted",
-        z3_code="from z3 import *\n...",
-        z3_theory_used="arrays",
-        translation_success=True,
-        z3_validation_passed=True,
-        z3_validation_status="success",
-        solver_created=True,
-        constraints_added=5,
-        variables_declared=4,
-        execution_time=0.023,
-        declared_variables={"i": "Int", "j": "Int", "arr": "Array", "n": "Int"}
-    )
-    
-    print(f"✅ Created Z3Translation")
-    print(f"   Valid: {translation.is_valid}")
-    print(f"   Validation Score: {translation.validation_score:.2f}")
-    print(f"   Solver Created: {translation.solver_created}")
-    print(f"   Constraints: {translation.constraints_added}")
-    print(f"   Variables: {translation.variables_declared}")
-    print(f"   Execution Time: {translation.execution_time}s")
-    
-    # Show new Phase 4 fields
-    print("\n🆕 Phase 4 New Fields:")
-    print(f"   error_type: {translation.error_type}")
-    print(f"   error_line: {translation.error_line}")
-    print(f"   validation_warnings: {translation.validation_warnings}")
-    print(f"   solver_created: {translation.solver_created}")
-    print(f"   constraints_added: {translation.constraints_added}")
-    print(f"   variables_declared: {translation.variables_declared}")
-    
-    print("\n" + "=" * 80)
-    print("✅ PHASE 4 MIGRATION COMPLETE")
-    print("=" * 80)
-    print("\nCompleted phases:")
-    print("1. ✅ Enhanced models with all fields")
-    print("2. ✅ Z3 validator created (validator.py)")
-    print("3. ✅ Settings updated (z3_validation config)")
-    print("4. ✅ Translator integrated with validator")
-    print("5. ✅ Models enhanced with validation fields")
-    print("\nNext: Update pipeline to preserve all data!")
     print("=" * 80)
