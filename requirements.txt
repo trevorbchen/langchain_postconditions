@@ -1,31 +1,102 @@
-# Core Dependencies
-langchain>=0.1.0
-langchain-openai>=0.0.5
-langchain-community>=0.0.20
-openai>=1.0.0
+# ============================================================================
+# POSTCONDITION GENERATION SYSTEM - DEPENDENCIES
+# ============================================================================
+# Python 3.8+ required
+# Updated: 2025-01-30
 
-# Data Models & Validation
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
+# ============================================================================
+# CORE LANGCHAIN ECOSYSTEM
+# ============================================================================
+langchain>=0.1.0                # Core LangChain framework
+langchain-openai>=0.0.5         # OpenAI integration (ChatOpenAI, Embeddings)
+langchain-community>=0.0.20     # Community integrations (ChromaDB, etc.)
+langchain-core>=0.1.0           # Core abstractions and interfaces
 
-# Environment & Configuration
-python-dotenv>=1.0.0
+# ============================================================================
+# OPENAI API
+# ============================================================================
+openai>=1.0.0                   # OpenAI API client (required for LLM calls)
+tiktoken>=0.5.0                 # Token counting for OpenAI models
 
-# Vector Store & Embeddings
-chromadb>=0.4.0
-tiktoken>=0.5.0
+# ============================================================================
+# DATA MODELS & VALIDATION
+# ============================================================================
+pydantic>=2.0.0                 # Data validation and settings management
+pydantic-settings>=2.0.0        # Settings management from .env files
 
-# Testing
-pytest>=7.0.0
-pytest-asyncio>=0.21.0
-pytest-cov>=4.0.0
+# ============================================================================
+# ENVIRONMENT & CONFIGURATION
+# ============================================================================
+python-dotenv>=1.0.0            # Load environment variables from .env file
+pyyaml>=6.0.0                   # YAML file parsing (for prompts.yaml)
 
-# Development Tools (Optional)
-black>=23.0.0
-isort>=5.12.0
-mypy>=1.0.0
-ruff>=0.1.0
+# ============================================================================
+# VECTOR STORE & EMBEDDINGS
+# ============================================================================
+chromadb>=0.4.0                 # Vector database for semantic search
+faiss-cpu>=1.7.4                # Alternative vector store (optional)
 
-# Performance (Optional)
-aiohttp>=3.9.0
-orjson>=3.9.0
+# ============================================================================
+# Z3 THEOREM PROVER
+# ============================================================================
+z3-solver>=4.12.0               # Z3 theorem prover for formal verification
+
+# ============================================================================
+# DATABASE & STORAGE
+# ============================================================================
+# SQLite3 is built into Python, no separate install needed
+sqlalchemy>=2.0.0               # SQL toolkit (optional, for advanced DB ops)
+
+# ============================================================================
+# ASYNC & CONCURRENCY
+# ============================================================================
+aiohttp>=3.9.0                  # Async HTTP client (for parallel API calls)
+asyncio>=3.4.3                  # Async support (built-in, but explicit)
+
+# ============================================================================
+# PERFORMANCE & OPTIMIZATION
+# ============================================================================
+orjson>=3.9.0                   # Fast JSON parsing (optional performance boost)
+msgpack>=1.0.0                  # Efficient serialization (optional)
+
+# ============================================================================
+# TESTING & QUALITY ASSURANCE
+# ============================================================================
+pytest>=7.0.0                   # Testing framework
+pytest-asyncio>=0.21.0          # Async test support
+pytest-cov>=4.0.0               # Coverage reports
+pytest-mock>=3.10.0             # Mocking support
+
+# ============================================================================
+# DEVELOPMENT TOOLS (OPTIONAL)
+# ============================================================================
+# Code formatting and linting
+black>=23.0.0                   # Code formatter
+isort>=5.12.0                   # Import sorting
+mypy>=1.0.0                     # Static type checking
+ruff>=0.1.0                     # Fast Python linter
+
+# Documentation
+mkdocs>=1.5.0                   # Documentation generator (optional)
+mkdocs-material>=9.0.0          # Material theme for docs (optional)
+
+# Debugging
+ipython>=8.0.0                  # Enhanced Python shell (optional)
+ipdb>=0.13.0                    # IPython debugger (optional)
+
+# ============================================================================
+# MONITORING & OBSERVABILITY (OPTIONAL)
+# ============================================================================
+# LangSmith integration for LangChain debugging
+langsmith>=0.0.60               # LangChain monitoring (optional)
+
+# Logging
+colorlog>=6.7.0                 # Colored logging output (optional)
+
+# ============================================================================
+# UTILITIES
+# ============================================================================
+click>=8.0.0                    # CLI framework (if extending main.py)
+tqdm>=4.65.0                    # Progress bars (optional)
+tabulate>=0.9.0                 # Pretty table printing (optional)
+
