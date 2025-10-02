@@ -1,0 +1,48 @@
+{
+  "functions": [
+    {
+      "name": "find_max",
+      "description": "Finds the maximum value in an array",
+      "signature": "int find_max(int* array, int length)",
+      "input_parameters": [
+        {
+          "name": "array",
+          "data_type": "int*",
+          "description": "The array to search"
+        },
+        {
+          "name": "length",
+          "data_type": "int",
+          "description": "The length of the array"
+        }
+      ],
+      "output_parameters": [],
+      "return_values": [
+        {
+          "condition": "success",
+          "value": "max_value",
+          "description": "The maximum value found in the array",
+          "name": "result"
+        }
+      ],
+      "return_type": "int",
+      "edge_cases": [
+        "Empty array",
+        "NULL pointer",
+        "Single element"
+      ],
+      "complexity": "O(n)",
+      "memory_usage": "O(1)",
+      "body": "Initialize a variable 'max' with the first element of the array. Iterate over the array, if an element is greater than 'max', update 'max'. Return 'max' at the end.",
+      "dependencies": []
+    }
+  ],
+  "structs": [],
+  "enums": [],
+  "global_variables": [],
+  "includes": [
+    "stdio.h"
+  ],
+  "dependencies": [],
+  "metadata": {}
+}

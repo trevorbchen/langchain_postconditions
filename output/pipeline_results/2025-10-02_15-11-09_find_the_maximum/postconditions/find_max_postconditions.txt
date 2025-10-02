@@ -1,0 +1,75 @@
+================================================================================
+POSTCONDITIONS: find_max
+================================================================================
+
+Signature: int find_max(int* array, int length)
+Total: 6
+Average Quality: 0.50
+Average Robustness: 0.50
+
+Postcondition #1
+--------------------------------------------------------------------------------
+Formal: ∀i: 0 ≤ i < length → array[i] ≤ find_max(array, length)
+Natural: The returned value is greater than or equal to all elements in the array
+Translation: For every index i in the range from 0 to the length of the array, the value at array[i] is less than or equal to the result of find_max(array, length)
+Reasoning: This ensures that the function correctly identifies the maximum value in the array
+Quality: 0.50
+Robustness: 0.50
+Z3 Theory: arrays
+Edge Cases: Empty array (length=0): function should return a defined value for empty arrays, NULL pointer: function should handle NULL pointers gracefully, Single element: function should return the single element as the maximum
+
+Postcondition #2
+--------------------------------------------------------------------------------
+Formal: ∃i: 0 ≤ i < length ∧ array[i] = find_max(array, length)
+Natural: The maximum value exists in the array
+Translation: There exists an index i in the range from 0 to the length of the array such that the value at array[i] is equal to the result of find_max(array, length)
+Reasoning: This ensures that the function doesn't return a value that isn't present in the array
+Quality: 0.50
+Robustness: 0.50
+Z3 Theory: arrays
+Edge Cases: Empty array (length=0): function should return a defined value for empty arrays, NULL pointer: function should handle NULL pointers gracefully, Single element: function should return the single element as the maximum
+
+Postcondition #3
+--------------------------------------------------------------------------------
+Formal: length > 0 → ∃i: 0 ≤ i < length ∧ array[i] = find_max(array, length)
+Natural: If the array is not empty, the maximum value exists in the array
+Translation: If the length of the array is greater than 0, there exists an index i in the range from 0 to the length of the array such that the value at array[i] is equal to the result of find_max(array, length)
+Reasoning: This ensures that the function doesn't return a value that isn't present in the array, and handles empty arrays correctly
+Quality: 0.50
+Robustness: 0.50
+Z3 Theory: arrays
+Edge Cases: Empty array (length=0): function should return a defined value for empty arrays, NULL pointer: function should handle NULL pointers gracefully, Single element: function should return the single element as the maximum
+
+Postcondition #4
+--------------------------------------------------------------------------------
+Formal: length = 0 → find_max(array, length) = undefined
+Natural: If the array is empty, the function returns an undefined value
+Translation: If the length of the array is 0, the result of find_max(array, length) is undefined
+Reasoning: This ensures that the function handles empty arrays correctly
+Quality: 0.50
+Robustness: 0.50
+Z3 Theory: arrays
+Edge Cases: Empty array (length=0): function should return a defined value for empty arrays, NULL pointer: function should handle NULL pointers gracefully, Single element: function should return the single element as the maximum
+
+Postcondition #5
+--------------------------------------------------------------------------------
+Formal: array = NULL → find_max(array, length) = undefined
+Natural: If the array is NULL, the function returns an undefined value
+Translation: If the array is NULL, the result of find_max(array, length) is undefined
+Reasoning: This ensures that the function handles NULL pointers correctly
+Quality: 0.50
+Robustness: 0.50
+Z3 Theory: arrays
+Edge Cases: Empty array (length=0): function should return a defined value for empty arrays, NULL pointer: function should handle NULL pointers gracefully, Single element: function should return the single element as the maximum
+
+Postcondition #6
+--------------------------------------------------------------------------------
+Formal: length = 1 → find_max(array, length) = array[0]
+Natural: If the array contains only one element, the function returns that element
+Translation: If the length of the array is 1, the result of find_max(array, length) is equal to the first element of the array
+Reasoning: This ensures that the function handles arrays with a single element correctly
+Quality: 0.50
+Robustness: 0.50
+Z3 Theory: arrays
+Edge Cases: Empty array (length=0): function should return a defined value for empty arrays, NULL pointer: function should handle NULL pointers gracefully, Single element: function should return the single element as the maximum
+

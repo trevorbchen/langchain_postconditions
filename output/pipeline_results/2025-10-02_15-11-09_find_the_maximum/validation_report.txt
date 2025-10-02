@@ -1,0 +1,36 @@
+================================================================================
+Z3 VALIDATION REPORT
+================================================================================
+
+Session ID: 1b94c18b-2de2-470f-950a-64a45d0886e3
+Specification: find the maximum of an array
+Generated: 2025-10-02T15:09:52.923605
+
+OVERALL STATISTICS
+--------------------------------------------------------------------------------
+Total Functions: 1
+Total Postconditions: 6
+Total Z3 Translations: 6
+Validation Success Rate: 100.0%
+Solver Creation Rate: 0.0%
+Average Quality Score: 0.50
+Average Robustness Score: 0.50
+
+PER-FUNCTION DETAILS
+================================================================================
+
+Function: find_max
+--------------------------------------------------------------------------------
+Signature: int find_max(int* array, int length)
+Postconditions: 6
+Z3 Translations: 6
+Validations Passed: 6
+Validations Failed: 0
+Average Quality: 0.50
+Average Robustness: 0.50
+Edge Cases Covered: 18
+
+WARNINGS
+--------------------------------------------------------------------------------
+⚠️  Solver creation rate (0.0%) below threshold (80.0%)
+

@@ -1,0 +1,24 @@
+================================================================================
+GENERATED FUNCTIONS
+================================================================================
+
+Function: find_max
+Signature: int find_max(int* array, int length)
+Description: Finds the maximum value in an array
+Return Type: int
+Complexity: O(n)
+Memory: O(1)
+
+Input Parameters:
+  - array: int*
+    The array to search
+  - length: int
+    The length of the array
+
+Edge Cases:
+  - Empty array
+  - NULL pointer
+  - Single element
+
+--------------------------------------------------------------------------------
+
