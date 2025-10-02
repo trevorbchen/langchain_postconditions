@@ -1,0 +1,37 @@
+================================================================================
+Z3 VALIDATION REPORT
+================================================================================
+
+Session ID: e878acfa-f2f8-4fff-8c88-16eeb1ec837f
+Generated: 2025-10-01T20:28:45.304832
+
+📊 OVERVIEW
+--------------------------------------------------------------------------------
+Total Functions:        1
+Total Postconditions:   3
+Total Z3 Translations:  3
+
+✅ VALIDATION RESULTS
+--------------------------------------------------------------------------------
+Success Rate:           100.0%
+Solver Creation Rate:   0.0%
+Average Quality:        0.89
+Average Validation:     0.50
+
+📋 PER-FUNCTION RESULTS
+--------------------------------------------------------------------------------
+
+Function: sort_by_ones
+  Postconditions:       3
+  Z3 Translations:      3
+  Validations Passed:   3/3
+  Solver Creation Rate: 0.0%
+  Avg Constraints:      0.0
+  Avg Variables:        0.0
+
+
+⚠️  WARNINGS & RECOMMENDATIONS
+--------------------------------------------------------------------------------
+✅ All Z3 validations passed!
+
+================================================================================

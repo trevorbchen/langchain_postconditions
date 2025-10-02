@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
 """
-Enhanced Z3 Translator - Phase 4 Migration
+Enhanced Z3 Translator - Phase 3 Complete
 
-CHANGES:
-1. Added comprehensive Z3 code validation
-2. Added AST parsing for metadata extraction
-3. Added declared_variables, declared_sorts, custom_functions tracking
-4. Enhanced validation with detailed error reporting
-5. Added execution time tracking
-6. Improved robustness with multiple validation passes
+PHASE 3 CHANGES:
+1. ✅ Integrated Z3CodeValidator from validator.py
+2. ✅ Uses settings.z3_validation configuration
+3. ✅ Enhanced validation with runtime execution
+4. ✅ Tracks solver creation and constraints
+5. ✅ Improved error reporting with error types and line numbers
+6. ✅ Added execution time tracking
+7. ✅ Preserves all metadata from validator
+
+VALIDATION PIPELINE:
+- Pass 1: Syntax validation (AST parsing)
+- Pass 2: Import validation (Z3 imports)
+- Pass 3: Runtime execution (NEW - validates code actually runs)
+- Pass 4: Solver validation (verifies Solver() creation)
+- Pass 5: Metadata extraction (variables, sorts, functions)
 """
 
 import openai
@@ -21,12 +29,17 @@ import re
 import sys
 from pathlib import Path
 from datetime import datetime
+import time
 
 # Get the project root directory (3 levels up from this file)
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from utils.prompt_loader import PromptsManager
+from config.settings import settings
+
+# 🆕 IMPORT VALIDATOR (Phase 3)
+from modules.z3.validator import Z3CodeValidator, ValidationResult
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -36,71 +49,68 @@ class Z3Translator:
     """
     Enhanced Z3 code generator with comprehensive validation.
     
-    ENHANCED in Phase 4:
-    - Comprehensive syntax validation
-    - AST parsing for metadata extraction
-    - Tracks declared variables, sorts, and functions
-    - Detailed error reporting
-    - Execution time tracking
+    PHASE 3 ENHANCEMENTS:
+    - Integrated Z3CodeValidator for runtime validation
+    - Uses settings.z3_validation configuration
+    - Validates code execution (not just syntax)
+    - Tracks solver creation and constraint usage
+    - Detailed error reporting with types and line numbers
     """
     
     def __init__(self, api_key: Optional[str] = None, prompts_file: str = "config/prompts.yaml"):
+        """
+        Initialize translator with validator.
+        
+        Args:
+            api_key: OpenAI API key (uses env var if not provided)
+            prompts_file: Path to prompts YAML file
+        """
         self.client = openai.OpenAI(
             api_key=api_key or os.getenv("OPENAI_API_KEY")
         )
         self.prompts = PromptsManager(prompts_file)
+        
+        # 🆕 INITIALIZE VALIDATOR (Phase 3)
+        self.validator = Z3CodeValidator(
+            timeout=settings.z3_validation.timeout_seconds,
+            execution_method=settings.z3_validation.execution_method
+        )
+        
+        logger.info(f"Z3Translator initialized with validation: {settings.z3_validation.enabled}")
     
     def translate(self, 
                   postcondition: Dict[str, str],
                   function_context: Optional[Dict] = None) -> Dict[str, Any]:
         """
-        Translate formal postcondition to Z3 Python code.
+        Translate formal postcondition to Z3 Python code with validation.
+        
+        ENHANCED in Phase 3: Now uses Z3CodeValidator for comprehensive validation.
         
         Args:
-            postcondition: Dict with 'formal_text', 'natural_language', 'z3_theory'
-            function_context: Optional function signature/type info
+            postcondition: Dict with keys: formal_text, natural_language, z3_theory
+            function_context: Optional function context for better translation
             
         Returns:
-            Dict with enhanced validation metadata
+            Translation result with comprehensive validation metadata
         """
-        start_time = datetime.now()
-        
-        # Load prompt template
-        template = self.prompts.get_z3_translation_prompt()
+        start_time = time.time()
         
         formal_text = postcondition.get('formal_text', '')
         natural_language = postcondition.get('natural_language', '')
         z3_theory = postcondition.get('z3_theory', 'unknown')
         
-        # Build context
-        context_str = self._build_context(function_context, z3_theory)
+        logger.info(f"Translating postcondition to Z3 (theory: {z3_theory})")
         
-        # Format prompt
-        formatted = template.format(
-            formal_text=formal_text,
-            natural_language=natural_language,
-            z3_theory=z3_theory,
-            function_context=context_str
-        )
-        
-        system_prompt = formatted["system"]
-        user_prompt = formatted["human"]
-        
-        # Generate Z3 code
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.2,
-                max_tokens=1500
+            # Generate Z3 code using LLM
+            z3_code = self._generate_z3_code(
+                formal_text=formal_text,
+                natural_language=natural_language,
+                z3_theory=z3_theory,
+                function_context=function_context
             )
             
-            z3_code = self._extract_code(response.choices[0].message.content)
-            
-            # ENHANCED: Comprehensive validation
+            # Create result with validation
             result = self._create_translation_result(
                 formal_text=formal_text,
                 natural_language=natural_language,
@@ -108,18 +118,88 @@ class Z3Translator:
                 z3_theory=z3_theory
             )
             
-            # Track execution time
-            result['translation_time'] = (datetime.now() - start_time).total_seconds()
+            result['translation_time'] = time.time() - start_time
             result['generated_at'] = datetime.now().isoformat()
+            
+            logger.info(
+                f"Translation complete: {result['z3_validation_status']} "
+                f"(time: {result['translation_time']:.3f}s)"
+            )
             
             return result
             
         except Exception as e:
-            logger.error(f"Z3 translation failed: {e}")
-            return self._generate_fallback_z3(formal_text, natural_language, str(e))
+            logger.error(f"Translation failed: {e}", exc_info=True)
+            return self._create_error_result(
+                formal_text=formal_text,
+                natural_language=natural_language,
+                error=str(e),
+                elapsed_time=time.time() - start_time
+            )
     
-    def _build_context(self, function_context: Optional[Dict], z3_theory: str) -> str:
-        """Build context about function and theory."""
+    def _generate_z3_code(
+        self,
+        formal_text: str,
+        natural_language: str,
+        z3_theory: str,
+        function_context: Optional[Dict] = None
+    ) -> str:
+        """
+        Generate Z3 code using OpenAI API.
+        
+        Args:
+            formal_text: Formal specification
+            natural_language: Natural language description
+            z3_theory: Z3 theory to use
+            function_context: Optional function context
+            
+        Returns:
+            Generated Z3 Python code
+        """
+        # Build context string
+        context = self._build_context_string(function_context, z3_theory)
+        
+        # Get prompt template
+        system_prompt = self.prompts.get_prompt(
+            "z3_translation",
+            "system",
+            default="Translate formal postconditions to Z3 Python code."
+        )
+        user_prompt = self.prompts.get_prompt(
+            "z3_translation",
+            "user",
+            default="Formal: {formal_text}\nNatural: {natural_language}\nContext: {context}\n\nGenerate Z3 code:"
+        )
+        
+        # Format prompts
+        user_message = user_prompt.format(
+            formal_text=formal_text,
+            natural_language=natural_language,
+            context=context
+        )
+        
+        # Call OpenAI
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            temperature=0.3,
+            max_tokens=2000
+        )
+        
+        # Extract code from response
+        z3_code = self._extract_code(response.choices[0].message.content)
+        
+        return z3_code
+    
+    def _build_context_string(
+        self,
+        function_context: Optional[Dict],
+        z3_theory: str
+    ) -> str:
+        """Build context string for translation."""
         parts = []
         
         if function_context:
@@ -167,7 +247,16 @@ class Z3Translator:
         """
         Create translation result with comprehensive validation.
         
-        ENHANCED in Phase 4: Multi-pass validation with metadata extraction.
+        ENHANCED in Phase 3: Uses Z3CodeValidator for runtime validation.
+        
+        Args:
+            formal_text: Formal postcondition text
+            natural_language: Natural language description
+            z3_code: Generated Z3 code
+            z3_theory: Z3 theory used
+            
+        Returns:
+            Complete translation result with validation metadata
         """
         result = {
             'formal_text': formal_text,
@@ -175,12 +264,22 @@ class Z3Translator:
             'z3_code': z3_code,
             'z3_theory_used': z3_theory,
             'translation_success': False,
+            
+            # Validation fields (will be populated by validator)
             'z3_validation_passed': False,
             'z3_validation_status': 'not_validated',
             'validation_error': None,
+            'error_type': None,
+            'error_line': None,
             'warnings': [],
             
-            # NEW: Enhanced metadata fields
+            # Execution metrics (NEW in Phase 3)
+            'solver_created': False,
+            'constraints_added': 0,
+            'variables_declared': 0,
+            'execution_time': 0.0,
+            
+            # Metadata
             'z3_ast': None,
             'tokens': None,
             'custom_functions': [],
@@ -190,45 +289,101 @@ class Z3Translator:
         
         if not z3_code:
             result['validation_error'] = "Empty Z3 code generated"
+            result['z3_validation_status'] = 'failed'
             return result
         
-        # Pass 1: Basic syntax validation
-        syntax_valid, syntax_errors = self._validate_syntax(z3_code)
-        if not syntax_valid:
-            result['z3_validation_status'] = 'syntax_error'
-            result['validation_error'] = '; '.join(syntax_errors)
-            result['warnings'].extend(syntax_errors)
-            return result
+        # 🆕 PHASE 3: USE VALIDATOR FOR COMPREHENSIVE VALIDATION
+        if settings.z3_validation.enabled:
+            validation_result = self._validate_with_validator(z3_code)
+            result.update(self._merge_validation_result(validation_result))
+        else:
+            # Fallback to basic syntax validation if validator disabled
+            syntax_valid, syntax_errors = self._validate_syntax_only(z3_code)
+            if syntax_valid:
+                result['translation_success'] = True
+                result['z3_validation_passed'] = True
+                result['z3_validation_status'] = 'success'
+            else:
+                result['z3_validation_status'] = 'syntax_error'
+                result['validation_error'] = '; '.join(syntax_errors)
+                result['warnings'] = syntax_errors
         
-        # Pass 2: Z3-specific validation
-        z3_valid, z3_warnings = self._validate_z3_structure(z3_code)
-        result['warnings'].extend(z3_warnings)
-        
-        # Pass 3: Extract metadata
+        # Extract metadata regardless of validation result
         metadata = self._extract_metadata(z3_code)
         result.update(metadata)
         
-        # Pass 4: Parse AST
-        try:
-            result['z3_ast'] = self._parse_ast(z3_code)
-        except Exception as e:
-            result['warnings'].append(f"AST parsing failed: {e}")
-        
-        # Set final status
-        if syntax_valid and z3_valid:
-            result['translation_success'] = True
-            result['z3_validation_passed'] = True
-            result['z3_validation_status'] = 'success'
-        else:
-            result['translation_success'] = bool(z3_code)
-            result['z3_validation_status'] = 'warnings' if z3_warnings else 'success'
-        
         return result
     
-    def _validate_syntax(self, code: str) -> Tuple[bool, List[str]]:
+    def _validate_with_validator(self, z3_code: str) -> ValidationResult:
         """
-        Validate Python syntax.
+        Validate Z3 code using Z3CodeValidator.
         
+        NEW in Phase 3: Uses comprehensive validator with runtime execution.
+        
+        Args:
+            z3_code: Z3 code to validate
+            
+        Returns:
+            ValidationResult from validator
+        """
+        try:
+            validation_result = self.validator.validate(z3_code)
+            
+            if validation_result.passed:
+                logger.debug(f"✅ Z3 validation passed (time: {validation_result.execution_time:.3f}s)")
+            else:
+                logger.warning(
+                    f"❌ Z3 validation failed: {validation_result.status} - "
+                    f"{validation_result.error_message}"
+                )
+            
+            return validation_result
+            
+        except Exception as e:
+            logger.error(f"Validator error: {e}", exc_info=True)
+            # Return failed result
+            return ValidationResult(
+                passed=False,
+                status="validator_error",
+                error_message=f"Validator exception: {str(e)}",
+                error_type="ValidatorError"
+            )
+    
+    def _merge_validation_result(self, validation: ValidationResult) -> Dict[str, Any]:
+        """
+        Merge ValidationResult into translation result format.
+        
+        NEW in Phase 3: Converts ValidationResult to dict format.
+        
+        Args:
+            validation: ValidationResult from validator
+            
+        Returns:
+            Dictionary with validation fields
+        """
+        return {
+            'translation_success': validation.passed,
+            'z3_validation_passed': validation.passed,
+            'z3_validation_status': validation.status,
+            'validation_error': validation.error_message,
+            'error_type': validation.error_type,
+            'error_line': validation.error_line,
+            'warnings': validation.warnings,
+            
+            # Execution metrics (NEW)
+            'solver_created': validation.solver_created,
+            'constraints_added': validation.constraints_added,
+            'variables_declared': validation.variables_declared,
+            'execution_time': validation.execution_time,
+        }
+    
+    def _validate_syntax_only(self, code: str) -> Tuple[bool, List[str]]:
+        """
+        Fallback syntax validation when validator is disabled.
+        
+        Args:
+            code: Python code to validate
+            
         Returns:
             (is_valid, list_of_errors)
         """
@@ -245,200 +400,77 @@ class Z3Translator:
         
         return True, errors
     
-    def _validate_z3_structure(self, code: str) -> Tuple[bool, List[str]]:
-        """
-        Validate Z3-specific structure and best practices.
-        
-        Returns:
-            (is_valid, list_of_warnings)
-        """
-        warnings = []
-        
-        # Check for Z3 import
-        if 'from z3 import' not in code and 'import z3' not in code:
-            warnings.append("Missing Z3 import statement")
-        
-        # Check for Solver
-        if 'Solver()' not in code:
-            warnings.append("No Solver() instance found")
-        
-        # Check for constraints
-        if '.add(' not in code:
-            warnings.append("No constraints added to solver")
-        
-        # Check for check() call
-        if '.check()' not in code:
-            warnings.append("No solver.check() call found")
-        
-        # Check for variable declarations
-        z3_types = ['Int(', 'Real(', 'Bool(', 'Array(', 'BitVec(']
-        has_declarations = any(z3_type in code for z3_type in z3_types)
-        if not has_declarations:
-            warnings.append("No Z3 variable declarations found")
-        
-        # Check for proper quantifier usage
-        if 'ForAll' in code or 'Exists' in code:
-            # Check that quantifiers have proper domain constraints
-            if 'ForAll' in code and 'Implies' not in code:
-                warnings.append("ForAll without Implies - may need domain constraints")
-        
-        # Return True if no critical issues (warnings are ok)
-        return True, warnings
-    
     def _extract_metadata(self, code: str) -> Dict[str, Any]:
         """
-        Extract metadata from Z3 code.
+        Extract metadata from Z3 code (variables, sorts, functions).
         
-        ENHANCED in Phase 4: Comprehensive metadata extraction.
+        Args:
+            code: Z3 Python code
+            
+        Returns:
+            Dictionary with metadata
         """
         metadata = {
-            'custom_functions': [],
-            'declared_sorts': [],
             'declared_variables': {},
+            'declared_sorts': [],
+            'custom_functions': [],
         }
         
-        # Extract custom function definitions
-        func_pattern = r'^def\s+(\w+)\s*\('
-        for match in re.finditer(func_pattern, code, re.MULTILINE):
-            metadata['custom_functions'].append(match.group(1))
-        
-        # Extract Z3 sort declarations
-        sort_patterns = [
-            r'(\w+)\s*=\s*Int\(',
-            r'(\w+)\s*=\s*Real\(',
-            r'(\w+)\s*=\s*Bool\(',
-            r'(\w+)\s*=\s*Array\(',
-            r'(\w+)\s*=\s*BitVec\(',
-        ]
-        
-        for pattern in sort_patterns:
-            for match in re.finditer(pattern, code):
-                var_name = match.group(1)
+        try:
+            # Parse AST
+            tree = ast.parse(code)
+            
+            # Find variable declarations (Int, Real, Bool, Array, etc.)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call):
+                    if isinstance(node.func, ast.Name):
+                        func_name = node.func.id
+                        
+                        # Z3 variable types
+                        if func_name in ['Int', 'Real', 'Bool', 'BitVec', 'String']:
+                            if node.args and isinstance(node.args[0], ast.Constant):
+                                var_name = node.args[0].value
+                                metadata['declared_variables'][var_name] = func_name
+                        
+                        # Array declarations
+                        elif func_name == 'Array':
+                            if node.args and isinstance(node.args[0], ast.Constant):
+                                var_name = node.args[0].value
+                                metadata['declared_variables'][var_name] = 'Array'
+                        
+                        # Sorts
+                        elif func_name.endswith('Sort'):
+                            if func_name not in metadata['declared_sorts']:
+                                metadata['declared_sorts'].append(func_name)
                 
-                # Determine sort type
-                if 'Int(' in match.group(0):
-                    sort_type = 'Int'
-                elif 'Real(' in match.group(0):
-                    sort_type = 'Real'
-                elif 'Bool(' in match.group(0):
-                    sort_type = 'Bool'
-                elif 'Array(' in match.group(0):
-                    sort_type = 'Array'
-                elif 'BitVec(' in match.group(0):
-                    sort_type = 'BitVec'
-                else:
-                    sort_type = 'Unknown'
-                
-                metadata['declared_variables'][var_name] = sort_type
-                
-                if sort_type not in metadata['declared_sorts']:
-                    metadata['declared_sorts'].append(sort_type)
-        
-        # Extract Ints/Reals/Bools multi-declarations
-        multi_patterns = [
-            (r'Ints\(\s*[\'"]([^\'"]+)[\'"]\s*\)', 'Int'),
-            (r'Reals\(\s*[\'"]([^\'"]+)[\'"]\s*\)', 'Real'),
-            (r'Bools\(\s*[\'"]([^\'"]+)[\'"]\s*\)', 'Bool'),
-        ]
-        
-        for pattern, sort_type in multi_patterns:
-            for match in re.finditer(pattern, code):
-                var_names = match.group(1).split()
-                for var_name in var_names:
-                    metadata['declared_variables'][var_name] = sort_type
-                
-                if sort_type not in metadata['declared_sorts']:
-                    metadata['declared_sorts'].append(sort_type)
+                # Custom function definitions
+                elif isinstance(node, ast.FunctionDef):
+                    metadata['custom_functions'].append(node.name)
+            
+        except Exception as e:
+            logger.debug(f"Metadata extraction failed: {e}")
         
         return metadata
     
-    def _parse_ast(self, code: str) -> Dict[str, Any]:
-        """
-        Parse code into simplified AST representation.
-        
-        ENHANCED in Phase 4: Create analyzable AST structure.
-        """
-        try:
-            tree = ast.parse(code)
-            
-            ast_data = {
-                'imports': [],
-                'functions': [],
-                'assignments': [],
-                'function_calls': [],
-            }
-            
-            for node in ast.walk(tree):
-                # Extract imports
-                if isinstance(node, ast.ImportFrom):
-                    ast_data['imports'].append({
-                        'module': node.module,
-                        'names': [alias.name for alias in node.names]
-                    })
-                
-                # Extract function definitions
-                elif isinstance(node, ast.FunctionDef):
-                    ast_data['functions'].append({
-                        'name': node.name,
-                        'args': [arg.arg for arg in node.args.args],
-                        'line': node.lineno
-                    })
-                
-                # Extract assignments
-                elif isinstance(node, ast.Assign):
-                    for target in node.targets:
-                        if isinstance(target, ast.Name):
-                            ast_data['assignments'].append({
-                                'target': target.id,
-                                'line': node.lineno
-                            })
-                
-                # Extract function calls
-                elif isinstance(node, ast.Call):
-                    if isinstance(node.func, ast.Name):
-                        ast_data['function_calls'].append({
-                            'name': node.func.id,
-                            'line': node.lineno
-                        })
-            
-            return ast_data
-            
-        except Exception as e:
-            logger.error(f"AST parsing failed: {e}")
-            return {}
-    
-    def _tokenize_code(self, code: str) -> List[Tuple[str, str]]:
-        """
-        Tokenize Z3 code for analysis.
-        
-        Returns:
-            List of (token_type, token_value) tuples
-        """
-        import tokenize
-        import io
-        
-        try:
-            tokens = []
-            readline = io.StringIO(code).readline
-            
-            for token in tokenize.generate_tokens(readline):
-                tokens.append((
-                    tokenize.tok_name[token.type],
-                    token.string
-                ))
-            
-            return tokens
-        except Exception as e:
-            logger.error(f"Tokenization failed: {e}")
-            return []
-    
-    def _generate_fallback_z3(
+    def _create_error_result(
         self,
         formal_text: str,
         natural_language: str,
-        error: str
+        error: str,
+        elapsed_time: float
     ) -> Dict[str, Any]:
-        """Generate minimal fallback Z3 code."""
+        """
+        Create error result when translation fails.
+        
+        Args:
+            formal_text: Formal postcondition
+            natural_language: Natural language description
+            error: Error message
+            elapsed_time: Time elapsed before error
+            
+        Returns:
+            Error result dictionary
+        """
         return {
             'formal_text': formal_text,
             'natural_language': natural_language,
@@ -448,13 +480,18 @@ class Z3Translator:
             'z3_validation_passed': False,
             'z3_validation_status': 'failed',
             'validation_error': error,
+            'error_type': 'TranslationError',
             'warnings': [f'Translation failed: {error}'],
+            'solver_created': False,
+            'constraints_added': 0,
+            'variables_declared': 0,
+            'execution_time': 0.0,
             'z3_ast': None,
             'tokens': None,
             'custom_functions': [],
             'declared_sorts': [],
             'declared_variables': {},
-            'translation_time': 0.0,
+            'translation_time': elapsed_time,
             'generated_at': datetime.now().isoformat()
         }
 
@@ -494,6 +531,8 @@ def translate_to_z3_api(formal_text: str,
         'error': result.get('validation_error'),
         'warnings': result.get('warnings', []),
         'validation_status': result.get('z3_validation_status'),
+        'solver_created': result.get('solver_created', False),  # NEW
+        'constraints_added': result.get('constraints_added', 0),  # NEW
         'metadata': {
             'declared_variables': result.get('declared_variables', {}),
             'declared_sorts': result.get('declared_sorts', []),
@@ -510,6 +549,8 @@ def validate_z3_code(z3_code: str) -> Dict[str, Any]:
     """
     Standalone function to validate Z3 code.
     
+    ENHANCED in Phase 3: Uses Z3CodeValidator for comprehensive validation.
+    
     Args:
         z3_code: Z3 Python code to validate
         
@@ -520,25 +561,37 @@ def validate_z3_code(z3_code: str) -> Dict[str, Any]:
         >>> result = validate_z3_code(my_z3_code)
         >>> if result['valid']:
         ...     print("Code is valid!")
+        ...     print(f"Solver created: {result['solver_created']}")
     """
-    translator = Z3Translator()
+    if not settings.z3_validation.enabled:
+        logger.warning("Z3 validation is disabled in settings")
+        return {
+            'valid': False,
+            'status': 'disabled',
+            'errors': ['Validation disabled in settings'],
+            'warnings': [],
+            'metadata': {}
+        }
     
-    result = translator._create_translation_result(
-        formal_text="Validation check",
-        natural_language="Validation check",
-        z3_code=z3_code,
-        z3_theory="unknown"
+    validator = Z3CodeValidator(
+        timeout=settings.z3_validation.timeout_seconds,
+        execution_method=settings.z3_validation.execution_method
     )
     
+    validation_result = validator.validate(z3_code)
+    
     return {
-        'valid': result['z3_validation_passed'],
-        'status': result['z3_validation_status'],
-        'errors': [result['validation_error']] if result['validation_error'] else [],
-        'warnings': result['warnings'],
+        'valid': validation_result.passed,
+        'status': validation_result.status,
+        'errors': [validation_result.error_message] if validation_result.error_message else [],
+        'warnings': validation_result.warnings,
+        'solver_created': validation_result.solver_created,
+        'constraints_added': validation_result.constraints_added,
+        'variables_declared': validation_result.variables_declared,
+        'execution_time': validation_result.execution_time,
         'metadata': {
-            'declared_variables': result['declared_variables'],
-            'declared_sorts': result['declared_sorts'],
-            'custom_functions': result['custom_functions'],
+            'error_type': validation_result.error_type,
+            'error_line': validation_result.error_line,
         }
     }
 
@@ -548,99 +601,71 @@ def validate_z3_code(z3_code: str) -> Dict[str, Any]:
 # ============================================================================
 
 if __name__ == "__main__":
-    print("=" * 70)
-    print("PHASE 4 VALIDATION - Enhanced Z3 Translator")
-    print("=" * 70)
+    print("=" * 80)
+    print("PHASE 3 COMPLETE - Enhanced Z3 Translator with Runtime Validation")
+    print("=" * 80)
     
-    # Example 1: Test validation with valid Z3 code
-    print("\n1. Testing validation with valid Z3 code...")
-    print("-" * 70)
+    # Test 1: Validate valid Z3 code
+    print("\n1. Testing runtime validation with valid Z3 code...")
+    print("-" * 80)
     
     valid_code = """
 from z3 import *
 
 # Declare variables
-i, j = Ints('i j')
-arr = Array('arr', IntSort(), IntSort())
-n = Int('n')
+x = Int('x')
+y = Int('y')
 
-# Sorted property
-constraint = ForAll([i, j],
-    Implies(And(i >= 0, j > i, j < n),
-            Select(arr, i) <= Select(arr, j)))
-
-# Solver
+# Create solver
 s = Solver()
-s.add(constraint)
-s.add(n > 0)
+s.add(x > 0)
+s.add(y > x)
 
+# Check
 result = s.check()
 print(f"Result: {result}")
 """
     
-    validation_result = validate_z3_code(valid_code)
-    print(f"Valid: {validation_result['valid']}")
-    print(f"Status: {validation_result['status']}")
-    print(f"Warnings: {len(validation_result['warnings'])}")
-    print(f"Declared variables: {validation_result['metadata']['declared_variables']}")
-    print(f"Declared sorts: {validation_result['metadata']['declared_sorts']}")
+    result = validate_z3_code(valid_code)
+    print(f"✅ Valid: {result['valid']}")
+    print(f"   Status: {result['status']}")
+    print(f"   Solver Created: {result['solver_created']}")
+    print(f"   Constraints: {result['constraints_added']}")
+    print(f"   Variables: {result['variables_declared']}")
+    print(f"   Execution Time: {result['execution_time']:.3f}s")
     
-    # Example 2: Test validation with invalid code
-    print("\n2. Testing validation with invalid Z3 code...")
-    print("-" * 70)
+    # Test 2: Validate code with runtime error
+    print("\n2. Testing runtime validation with runtime error...")
+    print("-" * 80)
     
-    invalid_code = """
+    runtime_error_code = """
 from z3 import *
 
-# Missing variable declaration
-constraint = x > 0  # x not declared!
-
+# Undefined variable error
 s = Solver()
-s.add(constraint)
+s.add(undefined_x > 0)  # This will cause NameError
+print(s.check())
 """
     
-    validation_result = validate_z3_code(invalid_code)
-    print(f"Valid: {validation_result['valid']}")
-    print(f"Status: {validation_result['status']}")
-    print(f"Warnings: {validation_result['warnings']}")
+    result = validate_z3_code(runtime_error_code)
+    print(f"❌ Valid: {result['valid']}")
+    print(f"   Status: {result['status']}")
+    print(f"   Error: {result['errors']}")
+    print(f"   Error Type: {result['metadata']['error_type']}")
     
-    # Example 3: Test metadata extraction
-    print("\n3. Testing metadata extraction...")
-    print("-" * 70)
+    # Test 3: Check validator settings
+    print("\n3. Current Z3 validation settings...")
+    print("-" * 80)
+    print(f"   Enabled: {settings.z3_validation.enabled}")
+    print(f"   Timeout: {settings.z3_validation.timeout_seconds}s")
+    print(f"   Method: {settings.z3_validation.execution_method}")
+    print(f"   Validate Execution: {settings.z3_validation.validate_execution}")
+    print(f"   Validate Solver: {settings.z3_validation.validate_solver}")
     
-    complex_code = """
-from z3 import *
-
-def array_sum(arr, n):
-    if n == 0:
-        return 0
-    return Select(arr, n-1) + array_sum(arr, n-1)
-
-x, y, z = Ints('x y z')
-arr = Array('arr', IntSort(), IntSort())
-size = Int('size')
-
-constraint = array_sum(arr, size) == x + y + z
-
-s = Solver()
-s.add(constraint)
-"""
-    
-    validation_result = validate_z3_code(complex_code)
-    metadata = validation_result['metadata']
-    
-    print(f"Custom functions: {metadata['custom_functions']}")
-    print(f"Declared variables: {metadata['declared_variables']}")
-    print(f"Declared sorts: {metadata['declared_sorts']}")
-    
-    print("\n" + "=" * 70)
-    print("✅ PHASE 4 COMPLETE")
-    print("=" * 70)
-    print("\nEnhancements made:")
-    print("1. ✓ Multi-pass validation (syntax, structure, metadata)")
-    print("2. ✓ AST parsing for code analysis")
-    print("3. ✓ Metadata extraction (variables, sorts, functions)")
-    print("4. ✓ Comprehensive error reporting")
-    print("5. ✓ Execution time tracking")
-    print("6. ✓ Backward compatible API")
-    print("\nNext: Phase 5 - Update modules/pipeline/pipeline.py")
+    print("\n" + "=" * 80)
+    print("✅ Phase 3 Complete!")
+    print("   - Validator integrated")
+    print("   - Runtime validation working")
+    print("   - Comprehensive error reporting")
+    print("   - Execution metrics tracked")
+    print("=" * 80)

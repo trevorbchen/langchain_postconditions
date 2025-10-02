@@ -1,16 +1,17 @@
 """
-Enhanced Pipeline Orchestrator - Phase 7 Complete
+Enhanced Pipeline Orchestrator - Phase 5 Complete
 
-PHASE 3 CHANGES:
-- Enhanced _generate_postconditions_for_function to calculate ALL rich metrics
-- Updated _compute_statistics to aggregate quality data properly
-- Added comprehensive logging for enriched statistics
-- All metrics now show real values (not 0.0)
+PHASE 5 CHANGES (Validation Tracking):
+- Enhanced _translate_all_to_z3 to track detailed validation metrics
+- Added validation error collection and reporting
+- Track solver creation rates, constraint counts, variable counts
+- Calculate average execution times
+- Preserve all validation metadata
+- Generate validation warnings and recommendations
 
-PHASE 7 CHANGES (BATCHING):
-- Updated _translate_all_to_z3 to use batch translation
-- Now translates all postconditions per function in ONE LLM call
-- Reduced Z3 translation calls by ~87%
+Previous enhancements:
+- Phase 3: Calculate quality metrics (robustness, edge cases, etc.)
+- Phase 7: Batch Z3 translation (reduces API calls by 87%)
 """
 
 from typing import Optional, List
@@ -32,6 +33,7 @@ from core.models import (
     Function,
     ProcessingStatus
 )
+from config.settings import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -41,22 +43,24 @@ class PostconditionPipeline:
     """
     Unified pipeline for complete postcondition generation.
     
-    ENHANCED in Phase 3:
-    - Calculates ALL enriched metrics from rich fields
-    - Tracks quality scores, robustness, edge case coverage
-    - Computes mathematical validity rates
-    - Enhanced result statistics with real data
+    PHASE 5 ENHANCEMENTS (Validation Tracking):
+    - Tracks comprehensive Z3 validation metrics
+    - Collects validation errors with types and line numbers
+    - Calculates solver creation and constraint usage rates
+    - Measures execution performance
+    - Generates validation warnings and recommendations
     
-    ENHANCED in Phase 7 (BATCHING):
-    - Uses batch Z3 translation (atranslate_batch)
-    - Reduces LLM calls by ~87% for Z3 translation
+    Previous enhancements:
+    - Phase 3: Quality metrics (robustness, edge cases, validity)
+    - Phase 7: Batch Z3 translation (87% fewer API calls)
     
     Orchestrates:
     1. Generate pseudocode from specification
-    2. Generate postconditions with ALL rich fields (Phase 1-2)
-    3. Translate postconditions to Z3 code WITH BATCHING (Phase 7)
-    4. Calculate comprehensive statistics (Phase 3)
-    5. Save results with UTF-8 encoding
+    2. Generate postconditions with ALL rich fields
+    3. Translate postconditions to Z3 code WITH BATCHING
+    4. Track comprehensive validation metrics (NEW Phase 5)
+    5. Calculate statistics and generate reports
+    6. Save results with UTF-8 encoding
     """
     
     def __init__(
@@ -85,113 +89,78 @@ class PostconditionPipeline:
         
         Args:
             specification: Natural language specification
-            session_id: Optional session identifier
+            session_id: Optional session ID for tracking
             
         Returns:
-            CompleteEnhancedResult with all generated content and enriched metadata
+            CompleteEnhancedResult with all generated content
         """
-        if session_id is None:
-            session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        session_id = session_id or str(uuid.uuid4())
         
-        start_time = datetime.now()
-        
-        # Initialize result
         result = CompleteEnhancedResult(
             session_id=session_id,
             specification=specification,
-            codebase_path=str(self.codebase_path) if self.codebase_path else None,
-            generated_at=start_time,
-            overall_status=ProcessingStatus.IN_PROGRESS
+            status=ProcessingStatus.IN_PROGRESS
         )
+        
+        logger.info(f"Starting pipeline for session {session_id}")
         
         try:
             # Step 1: Generate pseudocode
-            print(f"📝 Step 1/3: Generating pseudocode...")
-            pseudocode_result = await self._generate_pseudocode(specification, result)
+            logger.info("Step 1: Generating pseudocode...")
+            result.pseudocode_result = await self._generate_pseudocode(specification)
             
-            if not pseudocode_result or not pseudocode_result.functions:
-                result.overall_status = ProcessingStatus.FAILED
-                result.errors.append("Pseudocode generation failed")
+            if not result.pseudocode_result or not result.pseudocode_result.functions:
+                result.status = ProcessingStatus.FAILED
+                result.errors.append("No functions generated from pseudocode")
                 return result
             
-            # Step 2: Generate postconditions (parallel) with ALL enriched fields
-            print(f"🔍 Step 2/3: Generating postconditions for {len(pseudocode_result.functions)} functions...")
-            function_results = await self._generate_all_postconditions(
-                specification,
-                pseudocode_result.functions,
-                result
-            )
+            result.total_functions = len(result.pseudocode_result.functions)
+            logger.info(f"Generated {result.total_functions} functions")
             
-            # Step 3: Translate to Z3 WITH BATCHING (Phase 7)
-            print(f"⚡ Step 3/3: Translating to Z3 (with batching)...")
-            await self._translate_all_to_z3(function_results)
+            # Step 2: Generate postconditions for each function
+            logger.info("Step 2: Generating postconditions...")
+            for function in result.pseudocode_result.functions:
+                func_result = await self._generate_postconditions_for_function(
+                    specification, function, result
+                )
+                result.function_results.append(func_result)
             
-            # Finalize result with comprehensive statistics
-            result.function_results = function_results
+            # Step 3: Translate to Z3 with batching (Phase 7)
+            if self.validate_z3:
+                logger.info("Step 3: Translating to Z3 (with batching)...")
+                await self._translate_all_to_z3(result.function_results)
+            
+            # Step 4: Compute statistics (Phase 3 + Phase 5)
+            logger.info("Step 4: Computing statistics...")
             self._compute_statistics(result)
-            result.total_processing_time = (datetime.now() - start_time).total_seconds()
             
-            # Determine overall status
-            if result.successful_z3_translations == result.total_postconditions:
-                result.overall_status = ProcessingStatus.SUCCESS
-            elif result.successful_z3_translations > 0:
-                result.overall_status = ProcessingStatus.PARTIAL
-            else:
-                result.overall_status = ProcessingStatus.FAILED
+            # Step 5: Generate validation report (Phase 5)
+            logger.info("Step 5: Generating validation report...")
+            self._generate_validation_report(result)
             
-            # Print summary with enriched metrics
-            self._print_summary(result)
+            result.overall_status = ProcessingStatus.SUCCESS  # ✅ Fixed: was 'status'
+            result.completed_at = datetime.now().isoformat()
             
-            return result
-        
+            logger.info(f"Pipeline completed successfully for session {session_id}")
+            
         except Exception as e:
-            result.overall_status = ProcessingStatus.FAILED
-            result.errors.append(f"Pipeline error: {str(e)}")
-            return result
+            logger.error(f"Pipeline error: {e}", exc_info=True)
+            result.status = ProcessingStatus.FAILED
+            result.errors.append(str(e))
+        
+        return result
     
-    def process_sync(
-        self,
-        specification: str,
-        session_id: Optional[str] = None
-    ) -> CompleteEnhancedResult:
-        """Synchronous version of process()."""
+    def process_sync(self, specification: str, session_id: Optional[str] = None) -> CompleteEnhancedResult:
+        """Synchronous wrapper for process()."""
         return asyncio.run(self.process(specification, session_id))
     
-    async def _generate_pseudocode(
-        self,
-        specification: str,
-        result: CompleteEnhancedResult
-    ) -> Optional[PseudocodeResult]:
-        """Generate pseudocode from specification."""
+    async def _generate_pseudocode(self, specification: str) -> PseudocodeResult:
+        """Generate C pseudocode from specification."""
         try:
-            pseudocode_result = await self.factory.pseudocode.agenerate(
-                specification=specification
-            )
-            
-            result.pseudocode_success = True
-            result.pseudocode_raw_output = pseudocode_result
-            result.functions_created = [f.name for f in pseudocode_result.functions]
-            
-            return pseudocode_result
-        
+            return await self.factory.pseudocode.agenerate(specification)
         except Exception as e:
-            result.pseudocode_success = False
-            result.pseudocode_error = str(e)
-            result.errors.append(f"Pseudocode generation failed: {e}")
-            return None
-    
-    async def _generate_all_postconditions(
-        self,
-        specification: str,
-        functions: List[Function],
-        result: CompleteEnhancedResult
-    ) -> List[FunctionResult]:
-        """Generate postconditions for all functions in parallel."""
-        tasks = [
-            self._generate_postconditions_for_function(specification, func, result)
-            for func in functions
-        ]
-        return await asyncio.gather(*tasks)
+            logger.error(f"Pseudocode generation failed: {e}")
+            raise
     
     async def _generate_postconditions_for_function(
         self,
@@ -200,9 +169,9 @@ class PostconditionPipeline:
         result: CompleteEnhancedResult
     ) -> FunctionResult:
         """
-        Generate postconditions for a single function.
+        Generate postconditions for a single function with quality metrics.
         
-        PHASE 3 ENHANCEMENT: Calculates ALL enriched metrics from rich fields.
+        PHASE 3: Enhanced to calculate quality metrics.
         """
         func_result = FunctionResult(
             function_name=function.name,
@@ -212,7 +181,7 @@ class PostconditionPipeline:
         )
         
         try:
-            # Generate postconditions (now with ALL enriched fields from Phase 1-2!)
+            # Generate postconditions with ALL rich fields
             postconditions = await self.factory.postcondition.agenerate(
                 function=function,
                 specification=specification
@@ -221,49 +190,36 @@ class PostconditionPipeline:
             func_result.postconditions = postconditions
             func_result.postcondition_count = len(postconditions)
             
-            # PHASE 3: Calculate enriched metrics from ALL rich fields
+            # PHASE 3: Calculate enriched metrics
             if postconditions:
-                print(f"\n   📊 Function: {function.name}")
-                print(f"      Postconditions generated: {len(postconditions)}")
-                
+                # Quality scores
                 func_result.average_quality_score = sum(
-                    pc.overall_priority_score for pc in postconditions
+                    pc.overall_quality_score for pc in postconditions
                 ) / len(postconditions)
-                print(f"      Avg quality score: {func_result.average_quality_score:.2f}")
                 
+                # Robustness analysis
                 func_result.average_robustness_score = sum(
                     pc.robustness_score for pc in postconditions
                 ) / len(postconditions)
-                print(f"      Avg robustness: {func_result.average_robustness_score:.2f}")
                 
-                total_edge_cases = sum(
+                # Edge case coverage
+                func_result.edge_case_coverage_score = sum(
                     len(pc.edge_cases_covered) for pc in postconditions
-                )
-                func_result.edge_case_coverage_score = total_edge_cases / len(postconditions)
-                print(f"      Edge cases per postcondition: {func_result.edge_case_coverage_score:.1f}")
+                ) / len(postconditions)
                 
+                # Mathematical validity
                 valid_count = sum(
                     1 for pc in postconditions 
-                    if pc.mathematical_validity and "valid" in pc.mathematical_validity.lower()
+                    if "valid" in pc.mathematical_validity.lower()
                 )
                 func_result.mathematical_validity_rate = valid_count / len(postconditions)
-                print(f"      Mathematical validity: {func_result.mathematical_validity_rate:.0%}")
                 
-                with_translation = sum(1 for pc in postconditions if pc.precise_translation)
-                with_reasoning = sum(1 for pc in postconditions if pc.reasoning)
-                
-                print(f"      With translations: {with_translation}/{len(postconditions)}")
-                print(f"      With reasoning: {with_reasoning}/{len(postconditions)}")
-                
-                avg_clarity = sum(pc.clarity_score for pc in postconditions) / len(postconditions)
-                avg_completeness = sum(pc.completeness_score for pc in postconditions) / len(postconditions)
-                
-                print(f"      Avg clarity: {avg_clarity:.2f}")
-                print(f"      Avg completeness: {avg_completeness:.2f}")
+                logger.info(f"Generated {len(postconditions)} postconditions for {function.name}")
+                logger.info(f"  Quality: {func_result.average_quality_score:.2f}")
+                logger.info(f"  Robustness: {func_result.average_robustness_score:.2f}")
         
         except Exception as e:
             result.errors.append(f"Error generating postconditions for {function.name}: {e}")
-            func_result.postcondition_count = 0
             logger.error(f"Failed to generate postconditions: {e}")
         
         return func_result
@@ -273,14 +229,19 @@ class PostconditionPipeline:
         function_results: List[FunctionResult]
     ) -> None:
         """
-        Translate all postconditions to Z3 using BATCHING (PHASE 7).
+        Translate all postconditions to Z3 using BATCHING.
         
-        NEW: Uses atranslate_batch() to translate multiple postconditions
-        per function in a single LLM call instead of one call per postcondition.
+        PHASE 5 ENHANCEMENTS (Validation Tracking):
+        - Track detailed validation metrics per function
+        - Collect validation errors with types and line numbers
+        - Calculate solver creation rates
+        - Track constraint and variable usage
+        - Measure execution performance
+        - Generate validation warnings
         
-        Savings: 
-        - Before: 8 postconditions = 8 LLM calls
-        - After:  8 postconditions = 1 LLM call (87% reduction)
+        PHASE 7 (Batching):
+        - Uses atranslate_batch() for multiple postconditions
+        - 8 postconditions = 1 LLM call (87% reduction)
         """
         for func_result in function_results:
             if not func_result.postconditions:
@@ -304,32 +265,72 @@ class PostconditionPipeline:
             logger.info(f"\n🔄 Translating Z3 for function: {func_result.function_name}")
             logger.info(f"   Postconditions: {len(func_result.postconditions)}")
             
-            # ✨ NEW IN PHASE 7: Batch translate all postconditions for this function
-            # (typically 6-10 postconditions → 1 LLM call)
+            # PHASE 7: Batch translate all postconditions for this function
             translations = await self.factory.z3.atranslate_batch(
                 postconditions=func_result.postconditions,
                 function_context=function_context
             )
             
-            # Store translations
-            func_result.z3_translations = translations
+            # Assign translations to postconditions
+            for pc, translation in zip(func_result.postconditions, translations):
+                pc.z3_translation = translation
             
-            # Update stats
-            func_result.z3_success_count = sum(
-                1 for t in translations if t.translation_success
-            )
-            func_result.z3_validated_count = sum(
+            # 🆕 PHASE 5: Track comprehensive validation metrics
+            func_result.z3_translations_count = len(translations)
+            func_result.z3_validations_passed = sum(
                 1 for t in translations if t.z3_validation_passed
             )
+            func_result.z3_validations_failed = len(translations) - func_result.z3_validations_passed
             
-            logger.info(f"   ✅ Z3 translations: {func_result.z3_success_count}/{len(translations)} succeeded")
-            logger.info(f"   ✅ Z3 validated: {func_result.z3_validated_count}/{len(translations)} passed validation")
+            # 🆕 PHASE 5: Collect validation errors
+            func_result.z3_validation_errors = []
+            for pc, translation in zip(func_result.postconditions, translations):
+                if not translation.z3_validation_passed:
+                    func_result.z3_validation_errors.append({
+                        "postcondition": pc.formal_text,
+                        "error": translation.validation_error,
+                        "error_type": translation.error_type,
+                        "error_line": translation.error_line,
+                        "status": translation.z3_validation_status
+                    })
+            
+            # 🆕 PHASE 5: Calculate execution metrics
+            if translations:
+                # Solver creation rate
+                solvers_created = sum(1 for t in translations if t.solver_created)
+                func_result.average_solver_creation_rate = solvers_created / len(translations)
+                
+                # Average constraints per code
+                func_result.average_constraints_per_code = sum(
+                    t.constraints_added for t in translations
+                ) / len(translations)
+                
+                # Average variables per code
+                func_result.average_variables_per_code = sum(
+                    t.variables_declared for t in translations
+                ) / len(translations)
+                
+                # Average execution time
+                avg_exec_time = sum(t.execution_time for t in translations) / len(translations)
+                
+                logger.info(f"   ✅ Z3 validations: {func_result.z3_validations_passed}/{len(translations)} passed")
+                logger.info(f"   🔧 Solver creation rate: {func_result.average_solver_creation_rate:.1%}")
+                logger.info(f"   📊 Avg constraints: {func_result.average_constraints_per_code:.1f}")
+                logger.info(f"   📊 Avg variables: {func_result.average_variables_per_code:.1f}")
+                logger.info(f"   ⏱️  Avg execution time: {avg_exec_time:.3f}s")
+                
+                # 🆕 PHASE 5: Log validation errors if any
+                if func_result.z3_validation_errors:
+                    logger.warning(f"   ⚠️  {len(func_result.z3_validation_errors)} validation errors:")
+                    for error in func_result.z3_validation_errors[:3]:  # Show first 3
+                        logger.warning(f"      • {error['error_type']}: {error['error'][:80]}...")
     
     def _compute_statistics(self, result: CompleteEnhancedResult) -> None:
         """
         Compute overall statistics for the result.
         
-        PHASE 3 ENHANCEMENT: Comprehensive statistics including quality metrics.
+        PHASE 5 ENHANCEMENT: Added Z3 validation statistics.
+        PHASE 3 ENHANCEMENT: Comprehensive quality metrics.
         """
         # Basic counts
         result.total_postconditions = sum(
@@ -337,16 +338,32 @@ class PostconditionPipeline:
         )
         
         result.total_z3_translations = sum(
-            len(fr.z3_translations) for fr in result.function_results
+            fr.z3_translations_count for fr in result.function_results
         )
         
-        result.successful_z3_translations = sum(
-            fr.z3_success_count for fr in result.function_results
+        # 🆕 PHASE 5: Z3 validation statistics
+        total_passed = sum(
+            fr.z3_validations_passed for fr in result.function_results
+        )
+        total_failed = sum(
+            fr.z3_validations_failed for fr in result.function_results
         )
         
-        result.validated_z3_translations = sum(
-            fr.z3_validated_count for fr in result.function_results
-        )
+        if result.total_z3_translations > 0:
+            result.z3_validation_success_rate = total_passed / result.total_z3_translations
+        else:
+            result.z3_validation_success_rate = 0.0
+        
+        # 🆕 PHASE 5: Solver creation rate across all functions
+        solver_rates = [
+            fr.average_solver_creation_rate
+            for fr in result.function_results
+            if fr.z3_translations_count > 0
+        ]
+        if solver_rates:
+            result.solver_creation_rate = sum(solver_rates) / len(solver_rates)
+        else:
+            result.solver_creation_rate = 0.0
         
         # PHASE 3: Calculate aggregate quality metrics
         if result.function_results:
@@ -356,10 +373,7 @@ class PostconditionPipeline:
                 if fr.average_quality_score > 0
             ]
             if quality_scores:
-                avg_quality = sum(quality_scores) / len(quality_scores)
-                result.warnings.append(
-                    f"Average quality score across all functions: {avg_quality:.2f}"
-                )
+                result.average_quality_score = sum(quality_scores) / len(quality_scores)
             
             robustness_scores = [
                 fr.average_robustness_score
@@ -367,31 +381,97 @@ class PostconditionPipeline:
                 if fr.average_robustness_score > 0
             ]
             if robustness_scores:
-                avg_robustness = sum(robustness_scores) / len(robustness_scores)
-                result.warnings.append(
-                    f"Average robustness score: {avg_robustness:.2f}"
-                )
+                result.average_robustness_score = sum(robustness_scores) / len(robustness_scores)
             
-            if result.total_postconditions > 0:
-                total_edge_cases = sum(
-                    fr.edge_case_coverage_score * fr.postcondition_count
-                    for fr in result.function_results
-                )
-                avg_edge_cases = total_edge_cases / result.total_postconditions
-                result.warnings.append(
-                    f"Average edge cases per postcondition: {avg_edge_cases:.1f}"
-                )
+            # 🆕 PHASE 5: Average validation score
+            validation_scores = []
+            for fr in result.function_results:
+                for pc in fr.postconditions:
+                    if pc.z3_translation:
+                        validation_scores.append(pc.z3_translation.validation_score)
             
-            validity_rates = [
-                fr.mathematical_validity_rate
-                for fr in result.function_results
-                if fr.postcondition_count > 0
-            ]
-            if validity_rates:
-                avg_validity = sum(validity_rates) / len(validity_rates)
-                result.warnings.append(
-                    f"Mathematical validity rate: {avg_validity:.1%}"
-                )
+            if validation_scores:
+                result.average_validation_score = sum(validation_scores) / len(validation_scores)
+            else:
+                result.average_validation_score = 0.0
+    
+    def _generate_validation_report(self, result: CompleteEnhancedResult) -> None:
+        """
+        Generate validation report with warnings and recommendations.
+        
+        NEW in PHASE 5: Comprehensive validation reporting.
+        """
+        if not settings.z3_validation.generate_reports:
+            return
+        
+        # Collect all validation errors across functions
+        all_errors = []
+        for fr in result.function_results:
+            all_errors.extend(fr.z3_validation_errors)
+        
+        if not all_errors:
+            result.warnings.append("✅ All Z3 validations passed!")
+            return
+        
+        # 🆕 PHASE 5: Generate warnings based on validation results
+        
+        # High failure rate warning
+        if result.z3_validation_success_rate < settings.z3_validation.min_success_rate:
+            result.warnings.append(
+                f"⚠️  Z3 validation success rate ({result.z3_validation_success_rate:.1%}) "
+                f"below threshold ({settings.z3_validation.min_success_rate:.1%})"
+            )
+        
+        # Low solver creation rate warning
+        if result.solver_creation_rate < settings.z3_validation.min_solver_creation_rate:
+            result.warnings.append(
+                f"⚠️  Solver creation rate ({result.solver_creation_rate:.1%}) "
+                f"below threshold ({settings.z3_validation.min_solver_creation_rate:.1%})"
+            )
+        
+        # Error type breakdown
+        error_types = {}
+        for error in all_errors:
+            error_type = error.get('error_type', 'Unknown')
+            error_types[error_type] = error_types.get(error_type, 0) + 1
+        
+        if error_types:
+            result.warnings.append(f"⚠️  Validation error breakdown:")
+            for error_type, count in sorted(error_types.items(), key=lambda x: x[1], reverse=True):
+                result.warnings.append(f"    • {error_type}: {count} occurrences")
+        
+        # 🆕 PHASE 5: Recommendations
+        recommendations = []
+        
+        if error_types.get('SyntaxError', 0) > 0:
+            recommendations.append(
+                "🔧 Syntax errors detected. Review Z3 code generation templates for proper Python syntax."
+            )
+        
+        if error_types.get('ImportError', 0) > 0:
+            recommendations.append(
+                "📦 Import errors found. Ensure 'from z3 import *' is included in all generated code."
+            )
+        
+        if error_types.get('NameError', 0) > 0 or error_types.get('RuntimeError', 0) > 0:
+            recommendations.append(
+                "⚡ Runtime errors detected. Review variable declarations and Z3 API usage."
+            )
+        
+        if error_types.get('TimeoutError', 0) > 0:
+            recommendations.append(
+                "⏱️  Timeout errors found. Generated constraints may be too complex or contain infinite loops."
+            )
+        
+        if result.solver_creation_rate < 0.8:
+            recommendations.append(
+                "🔍 Low solver creation rate. Ensure 'Solver()' is properly instantiated in generated code."
+            )
+        
+        if recommendations:
+            result.warnings.append("")
+            result.warnings.append("💡 Recommendations:")
+            result.warnings.extend(recommendations)
     
     def _build_function_context(self, function: Optional[Function]) -> Optional[dict]:
         """Build function context dictionary for Z3 translation."""
@@ -399,175 +479,130 @@ class PostconditionPipeline:
             return None
         
         return {
-            "name": function.name,
-            "signature": function.signature,
-            "parameters": [
+            'name': function.name,
+            'signature': function.signature,
+            'parameters': [
                 {
-                    "name": p.name,
-                    "data_type": p.data_type,
-                    "description": p.description
+                    'name': p.name,
+                    'data_type': p.data_type,
+                    'description': p.description
                 }
                 for p in function.input_parameters
-            ],
-            "return_type": function.return_type,
-            "description": function.description
+            ]
         }
-    
-    def _print_summary(self, result: CompleteEnhancedResult) -> None:
-        """
-        Print enhanced summary with quality metrics.
-        
-        PHASE 3: Shows enriched statistics with real values.
-        """
-        print(f"\n{'='*70}")
-        print(f"✅ Pipeline complete!")
-        print(f"{'='*70}")
-        print(f"Session ID: {result.session_id}")
-        print(f"Status: {result.overall_status.value}")
-        print(f"\nGeneration Statistics:")
-        print(f"  Functions: {len(result.function_results)}")
-        print(f"  Postconditions: {result.total_postconditions}")
-        print(f"  Z3 translations: {result.successful_z3_translations}/{result.total_z3_translations}")
-        print(f"  Z3 validated: {result.validated_z3_translations}/{result.total_z3_translations}")
-        print(f"  Processing time: {result.total_processing_time:.1f}s")
-        
-        # PHASE 3: Quality metrics summary (now with real values!)
-        if result.function_results:
-            print(f"\n📊 Quality Metrics:")
-            for fr in result.function_results:
-                if fr.postcondition_count > 0:
-                    print(f"  {fr.function_name}:")
-                    print(f"    Quality: {fr.average_quality_score:.2f}")
-                    print(f"    Robustness: {fr.average_robustness_score:.2f}")
-                    print(f"    Edge cases/pc: {fr.edge_case_coverage_score:.1f}")
-                    print(f"    Math validity: {fr.mathematical_validity_rate:.0%}")
-        
-        print(f"{'='*70}\n")
     
     def save_results(
         self,
         result: CompleteEnhancedResult,
         output_dir: Path
-    ) -> Path:
+    ) -> None:
         """
-        Save complete results to directory.
-        
-        Uses UTF-8 encoding for mathematical symbols in rich fields.
+        Save results to files with proper UTF-8 encoding.
         
         Args:
-            result: Result to save
-            output_dir: Output directory
-            
-        Returns:
-            Path to saved directory
+            result: Complete result to save
+            output_dir: Directory to save results
         """
-        output_dir = Path(output_dir)
-        session_dir = output_dir / result.session_id
-        session_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Save main result with UTF-8 encoding (for mathematical symbols)
-        result_path = session_dir / "result.json"
-        with open(result_path, 'w', encoding='utf-8') as f:
+        # Save complete JSON
+        json_path = output_dir / "complete_result.json"
+        with open(json_path, 'w', encoding='utf-8') as f:
             f.write(result.model_dump_json(indent=2))
         
-        # Save pseudocode files
-        self._save_pseudocode_files(result, session_dir)
+        # Save pseudocode if available
+        if result.pseudocode_result:
+            self._save_pseudocode(result.pseudocode_result, output_dir)
         
-        # Save individual Z3 files with UTF-8 encoding
-        z3_dir = session_dir / "z3_code"
-        z3_dir.mkdir(exist_ok=True)
+        # 🆕 PHASE 5: Save validation report
+        if settings.z3_validation.generate_reports:
+            self._save_validation_report(result, output_dir)
         
-        for func_result in result.function_results:
-            for i, translation in enumerate(func_result.z3_translations):
-                if translation.z3_code:
-                    z3_path = z3_dir / f"{func_result.function_name}_pc{i+1}.py"
-                    with open(z3_path, 'w', encoding='utf-8') as f:
-                        f.write(f"# Z3 verification for {func_result.function_name}\n")
-                        f.write(f"# Postcondition: {translation.natural_language}\n\n")
-                        f.write(translation.z3_code)
-        
-        # Save enriched postconditions summary
-        summary_path = session_dir / "postconditions_summary.txt"
-        with open(summary_path, 'w', encoding='utf-8') as f:
-            f.write(f"Postconditions Summary\n")
-            f.write(f"Session: {result.session_id}\n")
-            f.write(f"Generated: {result.generated_at}\n")
-            f.write(f"{'='*70}\n\n")
-            
-            for fr in result.function_results:
-                f.write(f"Function: {fr.function_name}\n")
-                f.write(f"{'='*70}\n\n")
-                
-                for i, pc in enumerate(fr.postconditions, 1):
-                    f.write(f"Postcondition {i}:\n")
-                    f.write(f"  Formal: {pc.formal_text}\n")
-                    f.write(f"  Natural: {pc.natural_language}\n")
-                    
-                    if pc.precise_translation:
-                        f.write(f"  Translation: {pc.precise_translation}\n")
-                    
-                    if pc.reasoning:
-                        f.write(f"  Reasoning: {pc.reasoning}\n")
-                    
-                    if pc.edge_cases_covered:
-                        f.write(f"  Edge cases: {len(pc.edge_cases_covered)}\n")
-                        for ec in pc.edge_cases_covered[:3]:
-                            f.write(f"    - {ec}\n")
-                    
-                    f.write(f"  Quality: {pc.overall_priority_score:.2f}\n")
-                    f.write(f"  Robustness: {pc.robustness_score:.2f}\n")
-                    f.write(f"\n")
-                
-                f.write(f"\n")
-        
-        print(f"💾 Results saved to: {session_dir}")
-        return session_dir
+        print(f"\n✅ Results saved to: {output_dir}")
+        print(f"   📄 complete_result.json")
+        if result.pseudocode_result:
+            print(f"   📝 pseudocode_summary.txt")
+            print(f"   📝 pseudocode_full.json")
+        if settings.z3_validation.generate_reports:
+            print(f"   📊 validation_report.txt")
     
-    def _save_pseudocode_files(self, result: CompleteEnhancedResult, session_dir: Path) -> None:
-        """Save pseudocode in multiple formats."""
-        if not result.pseudocode_raw_output or not result.pseudocode_raw_output.functions:
-            return
-        
-        pseudocode_dir = session_dir / "pseudocode"
+    def _save_pseudocode(self, pseudocode: PseudocodeResult, output_dir: Path):
+        """Save pseudocode in readable formats."""
+        pseudocode_dir = output_dir / "pseudocode"
         pseudocode_dir.mkdir(exist_ok=True)
         
-        pseudocode = result.pseudocode_raw_output
-        
-        # 1. Human-readable summary
+        # Summary text
         summary_path = pseudocode_dir / "pseudocode_summary.txt"
         with open(summary_path, 'w', encoding='utf-8') as f:
             f.write("=" * 70 + "\n")
             f.write("PSEUDOCODE SUMMARY\n")
-            f.write("=" * 70 + "\n")
-            f.write(f"Session: {result.session_id}\n")
-            f.write(f"Specification: {result.specification}\n")
-            f.write(f"Functions: {len(pseudocode.functions)}\n")
             f.write("=" * 70 + "\n\n")
             
             for func in pseudocode.functions:
                 f.write(f"Function: {func.name}\n")
-                f.write("-" * 70 + "\n")
                 f.write(f"Signature: {func.signature}\n")
-                f.write(f"Description: {func.description}\n\n")
-                
-                if func.input_parameters:
-                    f.write("Input Parameters:\n")
-                    for param in func.input_parameters:
-                        f.write(f"  • {param.name} ({param.data_type}): {param.description}\n")
-                    f.write("\n")
-                
-                f.write(f"Complexity: {func.complexity}\n")
-                f.write(f"Memory Usage: {func.memory_usage}\n\n")
-                f.write("=" * 70 + "\n\n")
+                f.write(f"Description: {func.description}\n")
+                f.write("\n")
         
-        # 2. Complete JSON
+        # Complete JSON
         json_path = pseudocode_dir / "pseudocode_full.json"
         with open(json_path, 'w', encoding='utf-8') as f:
             f.write(pseudocode.model_dump_json(indent=2))
+    
+    def _save_validation_report(self, result: CompleteEnhancedResult, output_dir: Path):
+        """
+        Save comprehensive validation report.
         
-        print(f"   📝 Pseudocode saved:")
-        print(f"      • pseudocode_summary.txt")
-        print(f"      • pseudocode_full.json")
+        NEW in PHASE 5: Detailed validation reporting.
+        """
+        report_path = output_dir / "validation_report.txt"
+        
+        with open(report_path, 'w', encoding='utf-8') as f:
+            f.write("=" * 80 + "\n")
+            f.write("Z3 VALIDATION REPORT\n")
+            f.write("=" * 80 + "\n\n")
+            
+            f.write(f"Session ID: {result.session_id}\n")
+            f.write(f"Generated: {result.started_at}\n\n")
+            
+            f.write("📊 OVERVIEW\n")
+            f.write("-" * 80 + "\n")
+            f.write(f"Total Functions:        {result.total_functions}\n")
+            f.write(f"Total Postconditions:   {result.total_postconditions}\n")
+            f.write(f"Total Z3 Translations:  {result.total_z3_translations}\n\n")
+            
+            f.write("✅ VALIDATION RESULTS\n")
+            f.write("-" * 80 + "\n")
+            f.write(f"Success Rate:           {result.z3_validation_success_rate:.1%}\n")
+            f.write(f"Solver Creation Rate:   {result.solver_creation_rate:.1%}\n")
+            f.write(f"Average Quality:        {result.average_quality_score:.2f}\n")
+            f.write(f"Average Validation:     {result.average_validation_score:.2f}\n\n")
+            
+            # Per-function breakdown
+            f.write("📋 PER-FUNCTION RESULTS\n")
+            f.write("-" * 80 + "\n")
+            for fr in result.function_results:
+                f.write(f"\nFunction: {fr.function_name}\n")
+                f.write(f"  Postconditions:       {fr.postcondition_count}\n")
+                f.write(f"  Z3 Translations:      {fr.z3_translations_count}\n")
+                f.write(f"  Validations Passed:   {fr.z3_validations_passed}/{fr.z3_translations_count}\n")
+                f.write(f"  Solver Creation Rate: {fr.average_solver_creation_rate:.1%}\n")
+                f.write(f"  Avg Constraints:      {fr.average_constraints_per_code:.1f}\n")
+                f.write(f"  Avg Variables:        {fr.average_variables_per_code:.1f}\n")
+                
+                if fr.z3_validation_errors:
+                    f.write(f"\n  ⚠️ Validation Errors ({len(fr.z3_validation_errors)}):\n")
+                    for error in fr.z3_validation_errors[:5]:  # Show first 5
+                        f.write(f"    • {error['error_type']}: {error['error'][:100]}\n")
+            
+            # Warnings and recommendations
+            if result.warnings:
+                f.write("\n\n⚠️  WARNINGS & RECOMMENDATIONS\n")
+                f.write("-" * 80 + "\n")
+                for warning in result.warnings:
+                    f.write(f"{warning}\n")
+            
+            f.write("\n" + "=" * 80 + "\n")
 
 
 # Convenience function
@@ -575,18 +610,31 @@ def process_specification(
     specification: str,
     codebase_path: Optional[Path] = None
 ) -> CompleteEnhancedResult:
-    """Process a specification with batching enabled."""
+    """Process a specification with validation tracking."""
     pipeline = PostconditionPipeline(codebase_path=codebase_path)
     return pipeline.process_sync(specification)
 
 
 if __name__ == "__main__":
-    print("=" * 70)
-    print("PHASE 7 COMPLETE - Pipeline with Batch Z3 Translation")
-    print("=" * 70)
-    print("\n✅ Changes:")
-    print("  - Updated _translate_all_to_z3 to use atranslate_batch()")
-    print("  - Reduces Z3 calls by ~87%")
-    print("\n📊 Expected Savings:")
-    print("  - 8 postconditions: 8 calls → 1 call")
-    print("  - 24 postconditions: 24 calls → 3 calls")
+    print("=" * 80)
+    print("PHASE 5 COMPLETE - Pipeline with Validation Tracking")
+    print("=" * 80)
+    print("\n✅ New Features:")
+    print("  • Track detailed validation metrics per function")
+    print("  • Collect validation errors with types and line numbers")
+    print("  • Calculate solver creation and constraint usage rates")
+    print("  • Measure execution performance")
+    print("  • Generate validation warnings and recommendations")
+    print("  • Save comprehensive validation reports")
+    print("\n📊 Metrics Tracked:")
+    print("  • Z3 validation success rate")
+    print("  • Solver creation rate")
+    print("  • Average constraints per code")
+    print("  • Average variables per code")
+    print("  • Execution times")
+    print("  • Error type breakdown")
+    print("\n💡 Reports Generated:")
+    print("  • validation_report.txt with detailed breakdown")
+    print("  • Per-function validation statistics")
+    print("  • Warnings and recommendations")
+    print("=" * 80)

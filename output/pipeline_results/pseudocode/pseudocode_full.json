@@ -1,0 +1,58 @@
+{
+  "functions": [
+    {
+      "name": "sort_by_ones",
+      "description": "Sorts an array by its ones digit",
+      "signature": "void sort_by_ones(int* arr, int size)",
+      "input_parameters": [
+        {
+          "name": "arr",
+          "data_type": "int*",
+          "description": "Array to be sorted",
+          "is_pointer": false,
+          "is_array": false,
+          "is_const": false
+        },
+        {
+          "name": "size",
+          "data_type": "int",
+          "description": "Size of the array",
+          "is_pointer": false,
+          "is_array": false,
+          "is_const": false
+        }
+      ],
+      "output_parameters": [],
+      "return_values": [
+        {
+          "condition": "success",
+          "value": "0",
+          "description": "Array sorted successfully",
+          "name": "result"
+        }
+      ],
+      "return_type": "void",
+      "preconditions": [
+        "arr != NULL",
+        "size > 0"
+      ],
+      "edge_cases": [
+        "Empty array",
+        "NULL pointer",
+        "Single element"
+      ],
+      "complexity": "O(n log n)",
+      "memory_usage": "O(1)",
+      "body": "Use a stable sorting algorithm (like Bubble Sort, Insertion Sort etc.) and modify the comparison operation to compare the ones digit of the numbers",
+      "dependencies": []
+    }
+  ],
+  "structs": [],
+  "enums": [],
+  "global_variables": [],
+  "includes": [
+    "stdio.h"
+  ],
+  "dependencies": [],
+  "metadata": {}
+}
