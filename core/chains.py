@@ -9,6 +9,7 @@ CHANGES FROM ORIGINAL:
 - ✅ KEPT translation chain for precise_translation
 - ✅ KEPT Z3 validation
 - ✅ KEPT batch Z3 translation
+- 🆕 ADDED context parameter support (CRITICAL FIX)
 
 This maintains all the valuable functionality while removing the scoring overhead.
 """
@@ -181,7 +182,7 @@ Return ONLY valid JSON, no markdown or explanations."""
 
 
 # ============================================================================
-# POSTCONDITION GENERATION CHAIN (STREAMLINED)
+# POSTCONDITION GENERATION CHAIN (STREAMLINED + CONTEXT FIX)
 # ============================================================================
 
 class PostconditionChain:
@@ -194,6 +195,7 @@ class PostconditionChain:
     - Does NOT request: scoring fields, ranking fields
     - Does NOT parse: scoring fields, ranking fields
     - Does NOT calculate: priority scores
+    - 🆕 SUPPORTS context parameter (CRITICAL FIX)
     """
     
     def __init__(self, streaming: bool = False):
@@ -275,6 +277,7 @@ Description: {function_description}
 Parameters: {parameters}
 Return Type: {return_type}
 Specification: {specification}
+{context}
 Edge Cases: {edge_cases}
 
 Generate 6-10 DIVERSE postconditions as JSON array."""
@@ -289,6 +292,7 @@ Generate 6-10 DIVERSE postconditions as JSON array."""
         function: Function,
         specification: str,
         edge_cases: Optional[List[str]] = None,
+        context: Optional[str] = None,  # 🆕 ADDED CONTEXT PARAMETER
         strength: str = "comprehensive"
     ) -> List[EnhancedPostcondition]:
         """Synchronous postcondition generation."""
@@ -296,6 +300,11 @@ Generate 6-10 DIVERSE postconditions as JSON array."""
             f"- {p.name}: {p.data_type}" for p in function.input_parameters
         ])
         edge_cases_str = "\n".join(edge_cases or function.edge_cases or [])
+        
+        # 🆕 Prepare context text
+        context_text = ""
+        if context:
+            context_text = f"\nCONTEXT:\n{context}"
         
         try:
             result = self.chain.invoke({
@@ -305,6 +314,7 @@ Generate 6-10 DIVERSE postconditions as JSON array."""
                 "parameters": parameters_str or "None",
                 "return_type": function.return_type,
                 "specification": specification,
+                "context": context_text,  # 🆕 PASS CONTEXT
                 "edge_cases": edge_cases_str
             })
             
@@ -321,6 +331,7 @@ Generate 6-10 DIVERSE postconditions as JSON array."""
         function: Function,
         specification: str,
         edge_cases: Optional[List[str]] = None,
+        context: Optional[str] = None,  # 🆕 ADDED CONTEXT PARAMETER
         strength: str = "comprehensive"
     ) -> List[EnhancedPostcondition]:
         """Async postcondition generation with automatic translation filling."""
@@ -328,6 +339,11 @@ Generate 6-10 DIVERSE postconditions as JSON array."""
             f"- {p.name}: {p.data_type}" for p in function.input_parameters
         ])
         edge_cases_str = "\n".join(edge_cases or function.edge_cases or [])
+        
+        # 🆕 Prepare context text
+        context_text = ""
+        if context:
+            context_text = f"\nCONTEXT:\n{context}"
         
         try:
             result = await self.chain.ainvoke({
@@ -337,6 +353,7 @@ Generate 6-10 DIVERSE postconditions as JSON array."""
                 "parameters": parameters_str or "None",
                 "return_type": function.return_type,
                 "specification": specification,
+                "context": context_text,  # 🆕 PASS CONTEXT
                 "edge_cases": edge_cases_str
             })
             
@@ -1021,10 +1038,11 @@ class ChainFactory:
 
 if __name__ == "__main__":
     print("=" * 80)
-    print(" CORE/CHAINS.PY - STREAMLINED VERSION")
+    print(" CORE/CHAINS.PY - FIXED VERSION WITH CONTEXT SUPPORT")
     print("=" * 80)
     
-    print("\nCHANGES FROM ORIGINAL:")
+    print("\nCHANGES IN THIS VERSION:")
+    print("  🆕 ADDED context parameter to generate() and agenerate()")
     print("  ❌ Removed parsing of scoring fields")
     print("     (confidence_score, robustness_score, clarity_score, etc.)")
     print("  ❌ Removed parsing of ranking fields")
@@ -1054,10 +1072,11 @@ if __name__ == "__main__":
     
     print("\nUSAGE:")
     print("  factory = ChainFactory()")
-    print("  postconditions = await factory.postcondition.agenerate(function, spec)")
+    print("  postconditions = await factory.postcondition.agenerate(")
+    print("      function, spec, context='additional info')")
     print("  translations = await factory.z3.atranslate_batch(postconditions)")
     
     print("\n" + "=" * 80)
-    print("This streamlined version is production-ready!")
+    print("✅ CRITICAL FIX APPLIED: context parameter now supported!")
     print("Replace your core/chains.py with this file.")
     print("=" * 80)

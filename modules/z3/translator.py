@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Enhanced Z3 Translator - Phase 3 Complete
+Enhanced Z3 Translator - Phase 3 Complete with Pydantic Support
 
 PHASE 3 CHANGES:
 1. ✅ Integrated Z3CodeValidator from validator.py
@@ -10,17 +10,18 @@ PHASE 3 CHANGES:
 5. ✅ Improved error reporting with error types and line numbers
 6. ✅ Added execution time tracking
 7. ✅ Preserves all metadata from validator
+8. 🆕 FIXED: Now handles both dict and Pydantic EnhancedPostcondition objects
 
 VALIDATION PIPELINE:
 - Pass 1: Syntax validation (AST parsing)
 - Pass 2: Import validation (Z3 imports)
-- Pass 3: Runtime execution (NEW - validates code actually runs)
+- Pass 3: Runtime execution (validates code actually runs)
 - Pass 4: Solver validation (verifies Solver() creation)
 - Pass 5: Metadata extraction (variables, sorts, functions)
 """
 
 import openai
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any, Union
 import logging
 import os
 from dotenv import load_dotenv
@@ -55,6 +56,7 @@ class Z3Translator:
     - Validates code execution (not just syntax)
     - Tracks solver creation and constraint usage
     - Detailed error reporting with types and line numbers
+    - 🆕 Handles both dict and Pydantic objects
     """
     
     def __init__(self, api_key: Optional[str] = None, prompts_file: str = "config/prompts.yaml"):
@@ -79,15 +81,16 @@ class Z3Translator:
         logger.info(f"Z3Translator initialized with validation: {settings.z3_validation.enabled}")
     
     def translate(self, 
-                  postcondition: Dict[str, str],
+                  postcondition: Union[Dict[str, str], Any],  # 🆕 FIXED: Accept both dict and Pydantic
                   function_context: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Translate formal postcondition to Z3 Python code with validation.
         
         ENHANCED in Phase 3: Now uses Z3CodeValidator for comprehensive validation.
+        🆕 FIXED: Now handles both dict and Pydantic EnhancedPostcondition objects.
         
         Args:
-            postcondition: Dict with keys: formal_text, natural_language, z3_theory
+            postcondition: Dict or EnhancedPostcondition with formal_text, natural_language, z3_theory
             function_context: Optional function context for better translation
             
         Returns:
@@ -95,9 +98,10 @@ class Z3Translator:
         """
         start_time = time.time()
         
-        formal_text = postcondition.get('formal_text', '')
-        natural_language = postcondition.get('natural_language', '')
-        z3_theory = postcondition.get('z3_theory', 'unknown')
+        # 🆕 FIXED: Extract fields from either dict or Pydantic object
+        formal_text = self._get_field(postcondition, 'formal_text', '')
+        natural_language = self._get_field(postcondition, 'natural_language', '')
+        z3_theory = self._get_field(postcondition, 'z3_theory', 'unknown')
         
         logger.info(f"Translating postcondition to Z3 (theory: {z3_theory})")
         
@@ -136,6 +140,32 @@ class Z3Translator:
                 error=str(e),
                 elapsed_time=time.time() - start_time
             )
+    
+    def _get_field(self, obj: Union[Dict, Any], field: str, default: Any = None) -> Any:
+        """
+        Get field from either dict or Pydantic object.
+        
+        🆕 NEW: Helper method to handle both dict and Pydantic objects.
+        
+        Args:
+            obj: Dict or Pydantic object
+            field: Field name to get
+            default: Default value if field not found
+            
+        Returns:
+            Field value or default
+        """
+        # Handle dict
+        if isinstance(obj, dict):
+            return obj.get(field, default)
+        
+        # Handle Pydantic object
+        if hasattr(obj, field):
+            value = getattr(obj, field)
+            return value if value is not None else default
+        
+        # Fallback
+        return default
     
     def _generate_z3_code(
         self,
@@ -594,78 +624,3 @@ def validate_z3_code(z3_code: str) -> Dict[str, Any]:
             'error_line': validation_result.error_line,
         }
     }
-
-
-# ============================================================================
-# EXAMPLE USAGE & TESTING
-# ============================================================================
-
-if __name__ == "__main__":
-    print("=" * 80)
-    print("PHASE 3 COMPLETE - Enhanced Z3 Translator with Runtime Validation")
-    print("=" * 80)
-    
-    # Test 1: Validate valid Z3 code
-    print("\n1. Testing runtime validation with valid Z3 code...")
-    print("-" * 80)
-    
-    valid_code = """
-from z3 import *
-
-# Declare variables
-x = Int('x')
-y = Int('y')
-
-# Create solver
-s = Solver()
-s.add(x > 0)
-s.add(y > x)
-
-# Check
-result = s.check()
-print(f"Result: {result}")
-"""
-    
-    result = validate_z3_code(valid_code)
-    print(f"✅ Valid: {result['valid']}")
-    print(f"   Status: {result['status']}")
-    print(f"   Solver Created: {result['solver_created']}")
-    print(f"   Constraints: {result['constraints_added']}")
-    print(f"   Variables: {result['variables_declared']}")
-    print(f"   Execution Time: {result['execution_time']:.3f}s")
-    
-    # Test 2: Validate code with runtime error
-    print("\n2. Testing runtime validation with runtime error...")
-    print("-" * 80)
-    
-    runtime_error_code = """
-from z3 import *
-
-# Undefined variable error
-s = Solver()
-s.add(undefined_x > 0)  # This will cause NameError
-print(s.check())
-"""
-    
-    result = validate_z3_code(runtime_error_code)
-    print(f"❌ Valid: {result['valid']}")
-    print(f"   Status: {result['status']}")
-    print(f"   Error: {result['errors']}")
-    print(f"   Error Type: {result['metadata']['error_type']}")
-    
-    # Test 3: Check validator settings
-    print("\n3. Current Z3 validation settings...")
-    print("-" * 80)
-    print(f"   Enabled: {settings.z3_validation.enabled}")
-    print(f"   Timeout: {settings.z3_validation.timeout_seconds}s")
-    print(f"   Method: {settings.z3_validation.execution_method}")
-    print(f"   Validate Execution: {settings.z3_validation.validate_execution}")
-    print(f"   Validate Solver: {settings.z3_validation.validate_solver}")
-    
-    print("\n" + "=" * 80)
-    print("✅ Phase 3 Complete!")
-    print("   - Validator integrated")
-    print("   - Runtime validation working")
-    print("   - Comprehensive error reporting")
-    print("   - Execution metrics tracked")
-    print("=" * 80)

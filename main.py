@@ -218,7 +218,12 @@ def display_result_summary(result):
             if func_result.postcondition_count > 0:
                 print(f"    Avg Quality: {func_result.average_quality_score:.2f}")
                 print(f"    Avg Robustness: {func_result.average_robustness_score:.2f}")
-                print(f"    Edge Cases/PC: {func_result.edge_case_coverage_score:.1f}")
+                edge_cases_per_pc = (
+                    func_result.total_edge_cases_covered / func_result.postcondition_count 
+                    if func_result.postcondition_count > 0 
+                    else 0.0
+                )
+                print(f"    Edge Cases/PC: {edge_cases_per_pc:.1f}")
                 print(f"    Z3 Validated: {func_result.z3_validations_passed}/{func_result.postcondition_count}")
 
 

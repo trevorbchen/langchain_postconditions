@@ -1,0 +1,10 @@
+================================================================================
+POSTCONDITION GENERATION SUMMARY
+================================================================================
+
+Session ID: req_20251002_222825
+Specification: add up each number in an array squared, square before adding
+Status: success
+Functions: 0
+Postconditions: 0
+Z3 Translations: 0

@@ -3,6 +3,11 @@ Enhanced Database Manager - Comprehensive Data Persistence
 
 Saves ALL rich data from pipeline including full generation history,
 quality trends, and detailed analysis results.
+
+This module provides:
+- EnhancedDatabaseManager: Main storage class with comprehensive tracking
+- ResultStorage: Alias for backward compatibility with pipeline.py
+- Helper classes for metadata snapshots and function tracking
 """
 
 import json
@@ -190,8 +195,18 @@ class ComprehensiveFunctionMetadata:
         self.current_postconditions = snapshot.postconditions
 
 
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
 def convert_postcondition_to_dict(pc: Any, session_id: str) -> Dict[str, Any]:
-    """Convert EnhancedPostcondition to dictionary."""
+    """
+    Convert EnhancedPostcondition to dictionary with all rich fields.
+    
+    Uses getattr with defaults to handle both old and new postcondition models.
+    This ensures backward compatibility while supporting enhanced fields.
+    """
+    # Handle Z3 translation serialization
     z3_trans_dict = None
     if hasattr(pc, 'z3_translation') and pc.z3_translation:
         if hasattr(pc.z3_translation, 'model_dump'):
@@ -202,15 +217,24 @@ def convert_postcondition_to_dict(pc: Any, session_id: str) -> Dict[str, Any]:
             z3_trans_dict = vars(pc.z3_translation)
     
     return {
+        # Core fields
         "formal_text": pc.formal_text,
         "natural_language": pc.natural_language,
+        
+        # Rich translations & explanations
         "precise_translation": getattr(pc, 'precise_translation', ''),
         "reasoning": getattr(pc, 'reasoning', ''),
+        
+        # Categorization
         "strength": getattr(pc, 'strength', 'standard'),
         "category": getattr(pc, 'category', 'core_correctness'),
+        
+        # Edge case analysis
         "edge_cases": getattr(pc, 'edge_cases', []),
         "edge_cases_covered": getattr(pc, 'edge_cases_covered', []),
         "coverage_gaps": getattr(pc, 'coverage_gaps', []),
+        
+        # Quality metrics
         "confidence_score": pc.confidence_score,
         "robustness_score": getattr(pc, 'robustness_score', 0.0),
         "clarity_score": getattr(pc, 'clarity_score', 0.0),
@@ -218,10 +242,24 @@ def convert_postcondition_to_dict(pc: Any, session_id: str) -> Dict[str, Any]:
         "testability_score": getattr(pc, 'testability_score', 0.0),
         "mathematical_quality_score": getattr(pc, 'mathematical_quality_score', 0.0),
         "overall_quality_score": getattr(pc, 'overall_quality_score', 0.0),
+        
+        # Mathematical properties
         "mathematical_validity": getattr(pc, 'mathematical_validity', ''),
         "z3_theory": getattr(pc, 'z3_theory', 'unknown'),
+        
+        # Organization fields
+        "organization_rank": getattr(pc, 'organization_rank', 0),
+        "importance_category": getattr(pc, 'importance_category', ''),
+        "selection_reasoning": getattr(pc, 'selection_reasoning', ''),
+        "robustness_assessment": getattr(pc, 'robustness_assessment', ''),
+        "is_primary_in_category": getattr(pc, 'is_primary_in_category', False),
+        "recommended_for_selection": getattr(pc, 'recommended_for_selection', True),
+        
+        # Z3 translation
         "z3_translation": z3_trans_dict,
-        "generated_at": datetime.now().isoformat(),
+        
+        # Metadata
+        "generated_at": getattr(pc, 'generated_at', datetime.now().isoformat()),
         "generation_session_id": session_id
     }
 
@@ -236,16 +274,37 @@ class EnhancedDatabaseManager:
     
     Features:
     - Full generation history tracking
-    - Rich postcondition metadata
+    - Rich postcondition metadata with all enhanced fields
     - Quality trends over time
     - Z3 validation tracking
     - Edge case intelligence
     - Performance metrics
+    - Per-function and per-session storage
+    
+    Storage Structure:
+        base_dir/
+            functions/
+                function_name.json  # Comprehensive metadata per function
+            sessions/
+                session_id.json     # Complete snapshot per pipeline run
     """
     
-    def __init__(self, base_dir: str = "data"):
-        """Initialize database manager."""
-        self.base_dir = Path(base_dir)
+    def __init__(self, base_dir: Path = None):
+        """
+        Initialize database manager.
+        
+        Args:
+            base_dir: Base directory for storage (default: "data")
+                     Can be string or Path object for compatibility
+        """
+        # Handle both Path and string inputs for compatibility
+        if base_dir is None:
+            self.base_dir = Path("data")
+        elif isinstance(base_dir, str):
+            self.base_dir = Path(base_dir)
+        else:
+            self.base_dir = base_dir
+            
         self.functions_dir = self.base_dir / "functions"
         self.sessions_dir = self.base_dir / "sessions"
         
@@ -265,11 +324,15 @@ class EnhancedDatabaseManager:
         """
         Save complete pipeline results with comprehensive metadata.
         
+        This is the main entry point for saving results. It:
+        1. Saves a complete session snapshot (all functions, aggregates)
+        2. Updates per-function metadata with generation history
+        
         Args:
             session_id: Unique session identifier
-            specification: Original specification
-            function_results: List of function results
-            total_time: Total processing time
+            specification: Original specification text
+            function_results: List of function results from pipeline
+            total_time: Total processing time in seconds
         """
         logger.info(f"Saving pipeline result for session {session_id}")
         
@@ -289,7 +352,81 @@ class EnhancedDatabaseManager:
                 function_result=func_result
             )
         
-        logger.info(f"Pipeline result saved successfully")
+        logger.info(f"Pipeline result saved successfully (session: {session_id})")
+    
+    def save_results(self, session_id: str, result: Any) -> None:
+        """
+        Save complete pipeline results (compatibility wrapper for pipeline.py).
+        
+        This method provides backward compatibility with pipeline.py which
+        calls save_results() instead of save_pipeline_result().
+        
+        Args:
+            session_id: Unique session identifier
+            result: CompleteEnhancedResult object from pipeline
+        """
+        logger.info(f"Saving results via compatibility wrapper for session {session_id}")
+        
+        try:
+            # Extract data from CompleteEnhancedResult object
+            specification = getattr(result, 'specification', '')
+            function_results = getattr(result, 'function_results', [])
+            total_time = getattr(result, 'total_processing_time', 0.0)
+            
+            # Validate we have the minimum required data
+            if not specification and not function_results:
+                logger.warning(f"No data to save for session {session_id}")
+                return
+            
+            # Call the main save method
+            self.save_pipeline_result(
+                session_id=session_id,
+                specification=specification,
+                function_results=function_results,
+                total_time=total_time
+            )
+            
+            logger.info(f"Successfully saved results for session {session_id}")
+            
+        except Exception as e:
+            logger.error(f"Error in save_results compatibility wrapper: {e}")
+            logger.exception("Full traceback:")
+            raise
+    
+    def save_function_results(
+        self, 
+        session_id: str, 
+        function_results: List[FunctionResult],
+        function_name: Optional[str] = None,  # 🆕 ADDED: Accept this parameter
+        specification: Optional[str] = None    # 🆕 ADDED: Accept this parameter
+    ) -> None:
+        """
+        Save function results (compatibility wrapper for pipeline.py).
+        
+        Another compatibility method that pipeline.py may call.
+        
+        Args:
+            session_id: Unique session identifier
+            function_results: List of function results to save
+            function_name: Optional function name (for backward compatibility)
+            specification: Optional specification (for backward compatibility)
+        """
+        logger.info(f"Saving {len(function_results)} function results for session {session_id}")
+        
+        try:
+            spec = specification or ""
+            
+            for func_result in function_results:
+                self._save_function_metadata(
+                    session_id=session_id,
+                    specification=spec,
+                    function_result=func_result
+                )
+            logger.info(f"Successfully saved {len(function_results)} function results")
+        except Exception as e:
+            logger.error(f"Error saving function results: {e}")
+            logger.exception("Full traceback:")
+            raise
     
     def _save_session_snapshot(
         self,
@@ -298,7 +435,7 @@ class EnhancedDatabaseManager:
         function_results: List[FunctionResult],
         total_time: float
     ) -> None:
-        """Save complete session snapshot."""
+        """Save complete session snapshot with all functions and aggregates."""
         session_file = self.sessions_dir / f"{session_id}.json"
         
         session_data = {
@@ -315,13 +452,13 @@ class EnhancedDatabaseManager:
             func_data = self._serialize_function_result(func_result, session_id)
             session_data["functions"].append(func_data)
         
-        # Calculate aggregates
+        # Calculate session-level aggregates
         session_data["aggregate_metrics"] = self._calculate_session_aggregates(
             function_results
         )
         
-        with open(session_file, 'w') as f:
-            json.dump(session_data, f, indent=2)
+        with open(session_file, 'w', encoding='utf-8') as f:
+            json.dump(session_data, f, indent=2, ensure_ascii=False)
         
         logger.info(f"Session snapshot saved: {session_file}")
     
@@ -331,13 +468,13 @@ class EnhancedDatabaseManager:
         specification: str,
         function_result: FunctionResult
     ) -> None:
-        """Save/update comprehensive function metadata."""
+        """Save/update comprehensive function metadata with generation history."""
         func_name = function_result.function_name
         metadata_file = self.functions_dir / f"{func_name}.json"
         
-        # Load existing or create new
+        # Load existing or create new metadata
         if metadata_file.exists():
-            with open(metadata_file, 'r') as f:
+            with open(metadata_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 metadata = self._dict_to_metadata(data)
         else:
@@ -356,12 +493,12 @@ class EnhancedDatabaseManager:
             function_result=function_result
         )
         
-        # Add to metadata
+        # Add to metadata (updates trends, stats, etc.)
         metadata.add_generation(snapshot)
         
-        # Save
-        with open(metadata_file, 'w') as f:
-            json.dump(metadata.to_dict(), f, indent=2)
+        # Save updated metadata
+        with open(metadata_file, 'w', encoding='utf-8') as f:
+            json.dump(metadata.to_dict(), f, indent=2, ensure_ascii=False)
         
         logger.info(f"Function metadata updated: {metadata_file}")
     
@@ -371,14 +508,14 @@ class EnhancedDatabaseManager:
         specification: str,
         function_result: FunctionResult
     ) -> GenerationSnapshot:
-        """Create comprehensive snapshot of generation run."""
-        # Convert postconditions
+        """Create comprehensive snapshot of a single generation run."""
+        # Convert postconditions with all rich fields
         stored_postconditions = [
             convert_postcondition_to_dict(pc, session_id)
             for pc in function_result.postconditions
         ]
         
-        # Calculate metrics
+        # Calculate quality metrics
         avg_confidence = 0.0
         avg_robustness = 0.0
         avg_quality = 0.0
@@ -398,7 +535,7 @@ class EnhancedDatabaseManager:
                 for pc in function_result.postconditions
             ) / len(function_result.postconditions)
         
-        # Collect edge cases
+        # Collect edge case intelligence
         unique_edge_cases = set()
         coverage_gaps = set()
         
@@ -415,7 +552,7 @@ class EnhancedDatabaseManager:
         z3_errors = []
         
         for pc in function_result.postconditions:
-            if hasattr(pc, 'z3_theory'):
+            if hasattr(pc, 'z3_theory') and pc.z3_theory:
                 z3_theories.add(pc.z3_theory)
             
             if hasattr(pc, 'z3_translation') and pc.z3_translation:
@@ -457,7 +594,7 @@ class EnhancedDatabaseManager:
         function_result: FunctionResult,
         session_id: str
     ) -> Dict[str, Any]:
-        """Serialize function result to dictionary."""
+        """Serialize function result to dictionary with all postconditions."""
         postconditions_data = [
             convert_postcondition_to_dict(pc, session_id)
             for pc in function_result.postconditions
@@ -482,7 +619,7 @@ class EnhancedDatabaseManager:
         self,
         function_results: List[FunctionResult]
     ) -> Dict[str, Any]:
-        """Calculate session-level aggregates."""
+        """Calculate session-level aggregate metrics."""
         total_postconditions = sum(len(fr.postconditions) for fr in function_results)
         total_z3_translations = 0
         total_validations_passed = 0
@@ -551,26 +688,73 @@ class EnhancedDatabaseManager:
             warnings_count=data.get("warnings_count", 0)
         )
     
-    # Query methods
+    # ========================================================================
+    # QUERY METHODS
+    # ========================================================================
+    
     def get_function_metadata(self, function_name: str) -> Optional[ComprehensiveFunctionMetadata]:
-        """Retrieve comprehensive metadata for a function."""
+        """
+        Retrieve comprehensive metadata for a function.
+        
+        Args:
+            function_name: Name of the function
+            
+        Returns:
+            ComprehensiveFunctionMetadata or None if not found
+        """
         metadata_file = self.functions_dir / f"{function_name}.json"
         
         if not metadata_file.exists():
             return None
         
-        with open(metadata_file, 'r') as f:
+        with open(metadata_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
             return self._dict_to_metadata(data)
     
+    def get_function_summary(self, function_name: str) -> Dict[str, Any]:
+        """
+        Get a summary of function metadata (for pipeline compatibility).
+        
+        Args:
+            function_name: Name of the function
+            
+        Returns:
+            Dictionary with summary information
+        """
+        metadata = self.get_function_metadata(function_name)
+        if not metadata:
+            return {
+                "function_name": function_name,
+                "exists": False
+            }
+        
+        return {
+            "function_name": metadata.function_name,
+            "exists": True,
+            "metadata": {
+                "total_generations": metadata.total_generations,
+                "last_updated": metadata.last_updated,
+                "best_quality_score": metadata.best_generation_quality_score,
+                "total_postconditions": metadata.total_postconditions_ever_generated
+            }
+        }
+    
     def get_session_data(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve full session snapshot."""
+        """
+        Retrieve full session snapshot.
+        
+        Args:
+            session_id: Session identifier
+            
+        Returns:
+            Complete session data or None if not found
+        """
         session_file = self.sessions_dir / f"{session_id}.json"
         
         if not session_file.exists():
             return None
         
-        with open(session_file, 'r') as f:
+        with open(session_file, 'r', encoding='utf-8') as f:
             return json.load(f)
     
     def list_all_functions(self) -> List[str]:
@@ -580,3 +764,41 @@ class EnhancedDatabaseManager:
     def list_all_sessions(self) -> List[str]:
         """List all stored session IDs."""
         return [f.stem for f in self.sessions_dir.glob("*.json")]
+    
+    def get_quality_trends(self, function_name: str) -> Optional[Dict[str, List[float]]]:
+        """
+        Get quality trends for a function over time.
+        
+        Args:
+            function_name: Name of the function
+            
+        Returns:
+            Dictionary with trend data or None if not found
+        """
+        metadata = self.get_function_metadata(function_name)
+        if not metadata:
+            return None
+        
+        return {
+            "quality_trend": metadata.quality_trend,
+            "robustness_trend": metadata.robustness_trend,
+            "confidence_trend": metadata.confidence_trend
+        }
+
+
+# ============================================================================
+# BACKWARD COMPATIBILITY ALIAS
+# ============================================================================
+
+# Alias for pipeline.py compatibility
+# This allows pipeline.py to import ResultStorage while using EnhancedDatabaseManager
+ResultStorage = EnhancedDatabaseManager
+
+# Export main classes
+__all__ = [
+    'EnhancedDatabaseManager',
+    'ResultStorage',  # Alias for backward compatibility
+    'GenerationSnapshot',
+    'ComprehensiveFunctionMetadata',
+    'convert_postcondition_to_dict'
+]
